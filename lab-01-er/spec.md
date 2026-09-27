@@ -83,10 +83,10 @@
 ## Billiard_table
 - **Billard-table** - сутністсь більярдного столу
 Атрибути:
- - id int autoincrement PK
+ - table_id int autoincrement PK
  - club_id int FK
  - table_number int
- - table_type TableType <!-PYRAMID_12FT, PYRAMID_10FT, POOL_9FT, SNOOKER_12FT etc.---> 
+ - table_type TableType <!--PYRAMID_12FT, PYRAMID_10FT, POOL_9FT, SNOOKER_12FT etc.--> 
  - table_status TableStatus <!--OCCUPIED, AVAILABLE, RESERVED, MAINTENANCE -->
 
 
