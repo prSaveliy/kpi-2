@@ -1,0 +1,90 @@
+erDiagram
+    User ||--o| Player : "has profile"
+    User ||--o{ Tournament : "directs"
+    Club ||--|{ Billiard_table : "owns"
+    Club ||--o{ Tournament : "hosts"
+    Tournament ||--o{ Tournament_registration : "has"
+    Tournament ||--o{ Match : "organizes"
+    Player |o--o{ Tournament_registration : "registers"
+    Team |o--o{ Tournament_registration : "registers"
+    Team }o--o{ Player : "consists of"
+    Match ||--|{ Match_participant : "features"
+    Player |o--o{ Match_participant : "participates as"
+    Team |o--o{ Match_participant : "participates as"
+    Billiard_table |o--o{ Match : "assigned to"
+
+    User {
+        int user_id PK
+        string first_name
+        string last_name
+        string email "unique"
+        string password
+        date date_of_birth
+    }
+
+    Player {
+        int player_id PK
+        int user_id FK "unique"
+        int rating
+        SportsTitle sports_title
+    }
+
+    Club {
+        int club_id PK
+        string name
+        string city
+        string address
+    }
+
+    Tournament {
+        int tournament_id PK
+        int club_id FK
+        int director_id FK "references User"
+        string name
+        decimal entry_fee
+        decimal prize_pool
+        Discipline discipline
+    }
+
+    Tournament_registration {
+        int tournament_registration_id PK
+        int tournament_id FK
+        int player_id FK "nullable"
+        int team_id FK "nullable"
+        int seed_number
+        int placement
+        datetime registered_at
+    }
+
+    Match {
+        int match_id PK
+        int tournament_id FK
+        int table_id FK "nullable"
+        int race_to
+        int time_limit_minutes
+        datetime started_at
+        datetime finished_at
+    }
+
+    Team {
+        int team_id PK
+        string name
+        datetime created_at
+    }
+
+    Billiard_table {
+        int table_id PK
+        int club_id FK
+        int table_number
+        TableType table_type
+        TableStatus table_status
+    }
+
+    Match_participant {
+        int match_participant_id PK
+        int match_id FK
+        int player_id FK "nullable"
+        int team_id FK "nullable"
+        int score
+        boolean is_winner
+    }
