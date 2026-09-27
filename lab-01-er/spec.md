@@ -40,25 +40,29 @@
 Атрибути:
  - tournament_id Int autoincrement PK
  - club_id Int FK
- - director_id FK
+ - director_id Int FK
  - name String
  - entry_fee Decimal
  - prize_pool Decimal
  - discipline Discipline <!--POOL_9, POOL_8, COMBINED_PYRAMID, SNOOKER etc.-->
- ...etc.
+ - format Format <!--SINGLE_ELIMINATION, DOUBLE_ELIMINATION, ROUND_ROBIN-->
+ - status TournamentStatus <!--ANNOUNCED, REGISTRATION_OPEN, ONGOING, FINISHED-->
+ - start_date Datetime
+ - end_date Datetime
 
 ### Tournament_registration
 - **Tournament_registration** - асоціативна сутність між гравцем та турніром.
 
 Атрибути:
  - tournament_registration_id Int autoincrement PK
- - tournament_id FK
- - player_id FK nullable
- - team_id FK nullable
+ - tournament_id Int FK
+ - player_id Int FK nullable
+ - team_id Int FK nullable
  - seed_number Int
  - placement Int
- - registered_at
- ...etc.
+ - payment_status PaymentStatus <!--PENDING, PAID, REFUNDED-->
+ - prize_won Decimal
+ - registered_at Datetime
 
 ### Match 
  - **Match** - сутність матчу.
@@ -66,17 +70,31 @@
 Атрибути:
  - match_id Int autoincrement PK
  - tournament_id Int FK
- - table_id Int FK
+ - table_id Int FK nullable
+ - stage MatchStage <!--QUALIFICATION, ROUND_OF_16, QUARTER_FINAL, SEMI_FINAL, FINAL-->
  - race_to Int
  - time_limit_minutes Int
+ - status MatchStatus <!--SCHEDULED, IN_PROGRESS, FINISHED, CANCELLED-->
+ - scheduled_at Datetime
  - started_at Datetime
  - finished_at Datetime
-...etc
+
+### Match_participant
+- **Match_participant** - асоціативна сутність учасника / сторони матчу.
+
+Атрибути:
+ - match_participant_id Int autoincrement PK
+ - match_id Int FK
+ - player_id Int FK nullable
+ - team_id Int FK nullable
+ - score Int
+ - side Int <!--1 або 2-->
+ - is_winner Boolean
 
 ## TEAM
 - **Team** - сутність команди.
 Атрибути:
- - team_id  Int
+ - team_id Int autoincrement PK
  - name String
  - created_at Datetime
 
