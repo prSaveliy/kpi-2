@@ -99,7 +99,7 @@
 - Tournament - Tournament_registration (1:0..N)
 - Player - Tournament_registration (0..1:0..N)
 - Team - Tournament_registration (0..1:0..N)
-- Team - Player (M:N)
+- Team - Player (M:1..N)
 - Match - Match_participant (1:2..N)
 - Player - Match_participant (0..1:0..N)
 - Team - Match_participant (0..1:0..N)
