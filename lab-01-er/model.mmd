@@ -7,7 +7,7 @@ erDiagram
     Tournament ||--o{ Match : "organizes"
     Player |o--o{ Tournament_registration : "registers"
     Team |o--o{ Tournament_registration : "registers"
-    Team }o--o{ Player : "consists of"
+    Team }o--|{ Player : "consists of"
     Match ||--|{ Match_participant : "features"
     Player |o--o{ Match_participant : "participates as"
     Team |o--o{ Match_participant : "participates as"
@@ -44,6 +44,10 @@ erDiagram
         decimal entry_fee
         decimal prize_pool
         Discipline discipline
+        Format format
+        TournamentStatus status
+        datetime start_date
+        datetime end_date
     }
 
     Tournament_registration {
@@ -53,6 +57,8 @@ erDiagram
         int team_id FK "nullable"
         int seed_number
         int placement
+        PaymentStatus payment_status
+        decimal prize_won
         datetime registered_at
     }
 
@@ -60,8 +66,11 @@ erDiagram
         int match_id PK
         int tournament_id FK
         int table_id FK "nullable"
+        MatchStage stage
         int race_to
         int time_limit_minutes
+        MatchStatus status
+        datetime scheduled_at
         datetime started_at
         datetime finished_at
     }
@@ -86,5 +95,6 @@ erDiagram
         int player_id FK "nullable"
         int team_id FK "nullable"
         int score
+        int side
         boolean is_winner
     }
