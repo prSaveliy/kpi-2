@@ -1,0 +1,66 @@
+flowchart LR
+    %% Актори: Люди (Human Actors)
+    User["👤 Користувач (User)"]
+    Player["🎱 Гравець (Player)"]
+    Captain["👑 Капітан команди (Captain)"]
+    Organizer["📋 Організатор (Organizer)"]
+    Admin["🛡️ Адміністратор (Admin)"]
+
+    %% Актор: Зовнішня система (External System Actor)
+    PaymentGateway["💳 Платіжний шлюз (Payment Gateway)"]
+
+    %% Ієрархія узагальнення акторів (Generalization)
+    Player -->|"<<generalize>>"| User
+    Captain -->|"<<generalize>>"| Player
+    Organizer -->|"<<generalize>>"| User
+    Admin -->|"<<generalize>>"| Organizer
+
+    %% Межа системи Billiard CRM (System Boundary)
+    subgraph BilliardCRM ["Система Billiard CRM"]
+        UC01(["UC-01: Автентифікуватися в системі"])
+        UC02(["UC-02: Переглянути турніри та сітку матчів"])
+        UC03(["UC-03: Створити спортивний профіль гравця"])
+
+        UC04(["UC-04: Зареєструватися в індивідуальному турнірі"])
+        UC05(["UC-05: Керувати командою та подати командну заявку"])
+        UC06(["UC-06: Оплатити турнірний внесок"])
+        UC07(["UC-07: Скасувати неоплачену заявку"])
+
+        UC08(["UC-08: Створити турнір та сформувати сітку"])
+        UC09(["UC-09: Призначити номер посіву учаснику"])
+        UC10(["UC-10: Призначити стіл та зафіксувати рахунок матчу"])
+
+        UC11(["UC-11: Керувати клубами, столами та ролями"])
+    end
+
+    %% Межа зовнішньої платіжної системи
+    subgraph ExternalGateway ["Зовнішній контур: Payment Gateway"]
+        UC_PG1(["Обробити онлайн-транзакцію на чек-ауті"])
+        UC_PG2(["Надіслати Webhook-підтвердження оплати"])
+    end
+
+    %% Асоціації акторів із прецедентами
+    User --> UC01
+    User --> UC02
+    User --> UC03
+
+    Player --> UC04
+    Captain --> UC05
+
+    Organizer --> UC08
+    Organizer --> UC10
+
+    Admin --> UC11
+
+    %% Зв'язки <<include>> та <<extend>> (Первинна версія)
+    UC02 -.->|"<<include>>"| UC01
+    UC04 -.->|"<<extend>>"| UC06
+    UC05 -.->|"<<extend>>"| UC06
+    UC07 -.->|"<<extend>>"| UC04
+    UC09 -.->|"<<extend>>"| UC08
+
+    %% Взаємодія із зовнішнім платіжним шлюзом
+    UC06 --> UC_PG1
+    PaymentGateway --> UC_PG1
+    PaymentGateway --> UC_PG2
+    UC_PG2 --> UC06
