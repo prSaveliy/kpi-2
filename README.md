@@ -17,7 +17,7 @@
 | Завдання | Тема / Модель | Основні артефакти | Дедлайн | Оцінка | Статус |
 |:---:|---|---|:---:|:---:|:---:|
 | **[Лаб 1](./lab-01-er/)** | **Домен і модель даних (ER)** | `spec.md`, `model.mmd`, `render.png`, `AUDIT.md`, `DEFENCE.md`, `adr/`, `ai/` | 10 жовт. 2026 | 16 б. | ✅ **Виконано** |
-| **Лаб 2** | **Вимоги та Use Cases** | EARS-вимоги, user stories, Gherkin, Use Case діаграма, матриця трасування | 24 жовт. 2026 | 16 б. | ⏳ *Очікується* |
+| **[Лаб 2](./lab-02-requirements-usecases/)** | **Вимоги та Use Cases** | `spec.md`, `requirements.md`, `model.mmd`, `render.png`, `AUDIT.md`, `DEFENSE.md`, `adr/`, `ai/` | 24 жовт. 2026 | 16 б. | ✅ **Виконано** |
 | **Лаб 3** | **Взаємодія (Sequence Diagram)** | Sequence-діаграма, альтернативні гілки (alt/opt/loop), трасування до UC та ER | 21 лист. 2026 | 16 б. | ⏳ *Очікується* |
 | **Лаб 4** | **Процес / поведінка (Activity / State)** | Activity-діаграма або State Machine (fork/join, swimlanes, умови) | 05 груд. 2026 | 16 б. | ⏳ *Очікується* |
 | **Лаб 5** | **Архітектура (Component Diagram)** | UML Component Diagram, provided/required інтерфейси, зовнішні інтеграції | 19 груд. 2026 | 16 б. | ⏳ *Очікується* |
@@ -44,10 +44,18 @@
 
 ---
 
-### Завдання 2 — Вимоги та Use Cases (EARS + user stories + Gherkin) [16 балів]
-- **Мета:** Структуровані вимоги, сценарії використання і трасування.
-- **Артефакти:** EARS-вимоги (`WHEN... SHALL...`), User Stories, Gherkin-сценарії (`Given/When/Then`), Use Case Diagram (≥2 типи акторів, include/extend), матриця трасування багато-до-багатьох.
-- **Дедлайн:** 24 жовтня 2026.
+### [Завдання 2 — Вимоги та Use Cases (EARS + user stories + Gherkin)](./lab-02-requirements-usecases/) [16 балів]
+- **Директорія:** [`lab-02-requirements-usecases/`](./lab-02-requirements-usecases/)
+- **Мета:** Структуровані вимоги (EARS), сценарії використання (Use Case Diagram + User Stories + Gherkin) та матриця трасування (`M:N`).
+- **Ключові артефакти:**
+  - [spec.md](./lab-02-requirements-usecases/spec.md) — бізнес-намір, актори (5 ролей людей + зовнішній `Payment Gateway`), цілі системи та формальні критерії прийняття.
+  - [requirements.md](./lab-02-requirements-usecases/requirements.md) — вимоги EARS за всіма 5 шаблонами (`REQ-01..REQ-11`), User Stories (`US-01..US-06`), Gherkin-сценарії та матриця трасування `M:N` із непокритою вимогою `REQ-11`.
+  - [model.mmd](./lab-02-requirements-usecases/model.mmd) / [render.png](./lab-02-requirements-usecases/render.png) — декларативна Use Case діаграма у нотації Mermaid (`«generalize»`, `«include»`, `«extend»`, `System Boundary`) та її візуальний рендер.
+  - [AUDIT.md](./lab-02-requirements-usecases/AUDIT.md) — звіт інженерного аудиту першої ітерації з хешами комітів виправлень у специфікації (`0377bf9`, `fcac044`, `1e233bc`, `909309c`, `c281790`).
+  - [DEFENSE.md](./lab-02-requirements-usecases/DEFENSE.md) — фінальний аркуш захисту (Намір і критерії, виправлені розбіжності, обґрунтування меж сценаріїв, чекліст перевірки).
+  - [adr/](./lab-02-requirements-usecases/adr/) — архітектурні рішення у форматі MADR:
+    - [ADR 0001: Визначення меж сценаріїв, передумов автентифікації та декомпозиції «include» / «extend»](./lab-02-requirements-usecases/adr/0001-scenario-boundaries-and-usecase-decomposition.md) (коміт `9bf6bad`)
+  - [ai/](./lab-02-requirements-usecases/ai/) — аудиторський слід роботи з ШІ (промпти, сирі генерації, аудит-фідбек для 2 ітерацій).
 
 ---
 
