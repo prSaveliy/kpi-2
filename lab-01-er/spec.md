@@ -4,12 +4,13 @@
 ## Сутності та атрибути
 
 ### users
-Узагальнююча сутність облікових записів акторів системи (гравці, директори турнірів, адміністратори).
+Узагальнююча сутність облікових записів акторів системи (користувачі, гравці, організатори турнірів, адміністратори).
 - `user_id` int autoincrement PK
 - `first_name` varchar
 - `last_name` varchar
 - `email` varchar unique
 - `password_hash` varchar
+- `role` user_role ENUM (`'USER'`, `'ORGANIZER'`, `'ADMIN'`)
 - `date_of_birth` date
 - `created_at` timestamptz
 - `deleted_at` timestamptz nullable
