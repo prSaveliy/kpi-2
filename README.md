@@ -37,7 +37,7 @@
   - [DEFENCE.md](./lab-01-er/DEFENCE.md) — фінальний аркуш захисту (Intent, топ-3 розбіжності, ADR, чекліст перевірки).
   - [adr/](./lab-01-er/adr/) — архітектурні рішення у форматі MADR:
     - [ADR 0001: Наслідування ролей через розширення профілю](./lab-01-er/adr/0001-user-roles-inheritance-model.md) (коміт `047ef6d`)
-    - [ADR 0002: Динамічна авторизація на основі структурних зв'язків (SSOT)](./lab-01-er/adr/0002-derived-role-authorization.md) (коміт `fe375f1`)
+    - [ADR 0002: Гібридна модель авторизації (Global RBAC + Contextual ReBAC)](./lab-01-er/adr/0002-derived-role-authorization.md) (коміти `fe375f1`, `0caff59`)
     - [ADR 0003: Уніфікований поліморфний учасник матчу](./lab-01-er/adr/0003-match-participant-polymorphism.md) (коміт `33c5435`)
     - [ADR 0004: Склад команди та виділення ролі капітана](./lab-01-er/adr/0004-team-membership-and-captaincy.md) (коміт `d29cb3a`)
   - [ai/](./lab-01-er/ai/) — аудиторський слід роботи з ШІ (промпти, сирі генерації, аудит-фідбек для 3 ітерацій).
