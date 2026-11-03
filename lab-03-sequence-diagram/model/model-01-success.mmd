@@ -1,0 +1,89 @@
+sequenceDiagram
+    autonumber
+    actor Player as Player (Гравець)
+    participant WebUI as Frontend (WebUI)
+    participant Auth as AuthMiddleware
+    participant RegCtrl as RegistrationController
+    participant RegSvc as RegistrationService
+    participant PaySvc as PaymentService
+    actor Gateway as Payment Gateway
+    participant DB as Database (PostgreSQL)
+
+    Player ->> WebUI: clickRegister(tournamentId=5)
+    activate WebUI
+    WebUI ->> Auth: POST /api/tournaments/5/registrations<br/>Header: Authorization: Bearer jwt_token
+    activate Auth
+    Auth ->> Auth: verifyJwtAndRole(jwt)<br/>[claims: user_id=10, role=USER, player_id=42]
+    Auth ->> RegCtrl: forward(req, AuthContext(userId=10, playerId=42))
+    activate RegCtrl
+    RegCtrl ->> RegSvc: registerPlayer(playerId=42, tournamentId=5)
+    activate RegSvc
+
+    RegSvc ->> DB: SELECT * FROM tournament WHERE tournament_id = 5 FOR UPDATE
+    activate DB
+    DB -->> RegSvc: tournament(status='REGISTRATION_OPEN', deadline, max=32, fee=500.00)
+    deactivate DB
+
+    RegSvc ->> DB: SELECT COUNT(*) FROM tournament_registration WHERE tournament_id = 5 AND payment_status != 'CANCELLED'
+    activate DB
+    DB -->> RegSvc: count = 14
+    deactivate DB
+
+    RegSvc ->> DB: INSERT INTO tournament_registration (tournament_id, player_id, team_id, payment_status, seed_number)<br/>VALUES (5, 42, NULL, 'PENDING', NULL) RETURNING tournament_registration_id
+    activate DB
+    DB -->> RegSvc: tournament_registration_id = 101
+    deactivate DB
+
+    opt [entry_fee > 0]
+        RegSvc ->> PaySvc: initiateCheckout(regId=101, amount=500.00)
+        activate PaySvc
+        PaySvc ->> Gateway: POST /v1/checkout/sessions<br/>{amount: 500.00, reg_id: 101, return_url}
+        activate Gateway
+        Gateway -->> PaySvc: 200 OK {session_id: 'cs_101', checkout_url}
+        deactivate Gateway
+        PaySvc -->> RegSvc: checkoutUrl = 'https://pay.gateway.com/pay/cs_101'
+        deactivate PaySvc
+    end
+
+    RegSvc -->> RegCtrl: RegistrationResult(regId=101, status='PENDING', checkoutUrl)
+    deactivate RegSvc
+    RegCtrl -->> Auth: 201 Created {registration_id: 101, status: 'PENDING', checkout_url}
+    deactivate RegCtrl
+    Auth -->> WebUI: 201 Created (checkout_url)
+    deactivate Auth
+    WebUI -->> Player: redirect(checkoutUrl)
+    deactivate WebUI
+
+    Note over Player, Gateway: Асинхронна фаза оплати та Webhook
+
+    Player ->> Gateway: submitPayment(cardDetails, session_id='cs_101')
+    activate Gateway
+    Gateway ->> Gateway: processCharge(500.00) -> SUCCESS
+    Gateway -) RegCtrl: POST /api/webhooks/payment<br/>Header: Stripe-Signature<br/>Payload: {event: 'charge.successful', reg_id: 101}
+    deactivate Gateway
+    activate RegCtrl
+
+    RegCtrl ->> PaySvc: handleWebhook(payload, signature)
+    activate PaySvc
+    PaySvc ->> PaySvc: verifyHmacSignature(payload, signature, secret)
+    PaySvc ->> RegSvc: confirmPayment(registrationId=101)
+    activate RegSvc
+
+    par [Оновлення статусу заявки в БД]
+        RegSvc ->> DB: UPDATE tournament_registration<br/>SET payment_status = 'PAID'<br/>WHERE tournament_registration_id = 101
+        activate DB
+        DB -->> RegSvc: updated (1 row)
+        deactivate DB
+    and [Сповіщення клієнта через SSE / WebSocket]
+        RegSvc -) WebUI: pushEvent("REGISTRATION_CONFIRMED", {regId: 101, status: 'PAID'})
+        activate WebUI
+        WebUI -->> Player: showNotification("Оплату підтверджено! Вас включено до турніру")
+        deactivate WebUI
+    end
+
+    RegSvc -->> PaySvc: paymentConfirmed(status='PAID')
+    deactivate RegSvc
+    PaySvc -->> RegCtrl: webhookProcessed
+    deactivate PaySvc
+    RegCtrl -->> Gateway: 200 OK (Webhook Acknowledged)
+    deactivate RegCtrl

@@ -1,0 +1,52 @@
+sequenceDiagram
+    autonumber
+    actor Player as Player (Гравець)
+    participant WebUI as Frontend (WebUI)
+    participant Auth as AuthMiddleware
+    participant RegCtrl as RegistrationController
+    participant RegSvc as RegistrationService
+    participant DB as Database (PostgreSQL)
+
+    Player ->> WebUI: clickRegister(tournamentId=5)
+    activate WebUI
+    WebUI ->> Auth: POST /api/tournaments/5/registrations<br/>Header: Authorization: Bearer jwt_token
+    activate Auth
+    Auth ->> Auth: verifyJwtAndRole(jwt)<br/>[claims: user_id=10, role=USER, player_id=42]
+    Auth ->> RegCtrl: forward(req, AuthContext(userId=10, playerId=42))
+    activate RegCtrl
+    RegCtrl ->> RegSvc: registerPlayer(playerId=42, tournamentId=5)
+    activate RegSvc
+
+    RegSvc ->> DB: SELECT status, registration_deadline, max_participants FROM tournament WHERE tournament_id = 5
+    activate DB
+    DB -->> RegSvc: tournament(status='REGISTRATION_OPEN', deadline, max=32)
+    deactivate DB
+
+    RegSvc ->> DB: SELECT COUNT(*) as active_count,<br/>EXISTS(SELECT 1 FROM tournament_registration WHERE tournament_id = 5 AND player_id = 42 AND payment_status != 'CANCELLED') as has_registered<br/>FROM tournament_registration WHERE tournament_id = 5 AND payment_status != 'CANCELLED'
+    activate DB
+    DB -->> RegSvc: queryResult(active_count, has_registered)
+    deactivate DB
+
+    alt [now() > registration_deadline]
+        RegSvc -->> RegCtrl: throw RegistrationClosedException()
+        RegCtrl -->> Auth: 403 Forbidden {error: "REGISTRATION_CLOSED", message: "Дедлайн минув"}
+        Auth -->> WebUI: 403 Forbidden (REGISTRATION_CLOSED)
+        WebUI -->> Player: showErrorMessage("Відхилено: час реєстрації на турнір минув")
+    else [active_count >= max_participants]
+        RegSvc -->> RegCtrl: throw TournamentQuotaExceededException()
+        RegCtrl -->> Auth: 409 Conflict {error: "QUOTA_EXCEEDED", message: "Всі місця зайнято"}
+        Auth -->> WebUI: 409 Conflict (QUOTA_EXCEEDED)
+        WebUI -->> Player: showErrorMessage("Відхилено: всі 32 місця на турнір вже заповнені")
+    else [has_registered == true]
+        RegSvc -->> RegCtrl: throw DuplicateRegistrationException()
+        RegCtrl -->> Auth: 409 Conflict {error: "DUPLICATE_REGISTRATION", message: "Заявка вже існує"}
+        Auth -->> WebUI: 409 Conflict (DUPLICATE_REGISTRATION)
+        WebUI -->> Player: showErrorMessage("Відхилено: ви вже подали заявку на цей турнір")
+    end
+
+    Note over RegSvc, DB: Інваріант цілісності: INSERT не викликається, стан бази даних залишається незмінним
+
+    deactivate RegSvc
+    deactivate RegCtrl
+    deactivate Auth
+    deactivate WebUI
