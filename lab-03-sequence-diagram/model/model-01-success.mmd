@@ -24,12 +24,12 @@ sequenceDiagram
     DB -->> RegSvc: tournament(status='REGISTRATION_OPEN', deadline, max=32, fee=500.00)
     deactivate DB
 
-    RegSvc ->> DB: SELECT COUNT(*) FROM tournament_registration WHERE tournament_id = 5 AND payment_status != 'CANCELLED'
+    RegSvc ->> DB: SELECT COUNT(*) FROM tournament_registration<br/>WHERE tournament_id = 5 AND (payment_status = 'PAID' OR (payment_status = 'PENDING' AND registered_at + INTERVAL '15 minutes' > NOW()))
     activate DB
-    DB -->> RegSvc: count = 14
+    DB -->> RegSvc: active_count = 14
     deactivate DB
 
-    RegSvc ->> DB: INSERT INTO tournament_registration (tournament_id, player_id, team_id, payment_status, seed_number)<br/>VALUES (5, 42, NULL, 'PENDING', NULL) RETURNING tournament_registration_id
+    RegSvc ->> DB: INSERT INTO tournament_registration (tournament_id, player_id, team_id, payment_status, seed_number, registered_at)<br/>VALUES (5, 42, NULL, 'PENDING', NULL, NOW()) RETURNING tournament_registration_id
     activate DB
     DB -->> RegSvc: tournament_registration_id = 101
     deactivate DB
@@ -37,7 +37,7 @@ sequenceDiagram
     opt [entry_fee > 0]
         RegSvc ->> PaySvc: initiateCheckout(regId=101, amount=500.00)
         activate PaySvc
-        PaySvc ->> Gateway: POST /v1/checkout/sessions<br/>{amount: 500.00, reg_id: 101, return_url}
+        PaySvc ->> Gateway: POST /v1/checkout/sessions<br/>{amount: 500.00, reg_id: 101, expires_in: min(15m, deadline)}
         activate Gateway
         Gateway -->> PaySvc: 200 OK {session_id: 'cs_101', checkout_url}
         deactivate Gateway
@@ -70,7 +70,7 @@ sequenceDiagram
     activate RegSvc
 
     par [Оновлення статусу заявки в БД]
-        RegSvc ->> DB: UPDATE tournament_registration<br/>SET payment_status = 'PAID'<br/>WHERE tournament_registration_id = 101
+        RegSvc ->> DB: UPDATE tournament_registration<br/>SET payment_status = 'PAID'<br/>WHERE tournament_registration_id = 101 AND payment_status = 'PENDING'
         activate DB
         DB -->> RegSvc: updated (1 row)
         deactivate DB
