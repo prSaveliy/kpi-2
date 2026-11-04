@@ -23,7 +23,7 @@ sequenceDiagram
     DB -->> RegSvc: tournament(status='REGISTRATION_OPEN', deadline, max=32)
     deactivate DB
 
-    RegSvc ->> DB: SELECT COUNT(*) as active_count,<br/>(SELECT payment_status, registered_at FROM tournament_registration WHERE tournament_id = 5 AND player_id = 42) as existing_reg<br/>FROM tournament_registration WHERE tournament_id = 5 AND (payment_status = 'PAID' OR (payment_status = 'PENDING' AND registered_at + INTERVAL '15 minutes' > NOW()))
+    RegSvc ->> DB: SELECT COUNT(*) as active_count, (SELECT payment_status, registered_at<br/>FROM tournament_registration WHERE tournament_id = 5 AND player_id = 42) as existing_reg<br/>FROM tournament_registration WHERE tournament_id = 5<br/>AND (payment_status = 'PAID' OR (payment_status = 'PENDING' AND registered_at + INTERVAL '15 minutes' > NOW()))
     activate DB
     DB -->> RegSvc: queryResult(active_count, existing_reg)
     deactivate DB
