@@ -14,6 +14,7 @@
 - [01-feedback-sequence.md](./ai/01-feedback-sequence.md) - фідбек після першої ітерації.
 - [02-prompt-sequence.md](./ai/02-prompt-sequence.md) - той же фідбек разом із уточнюючими питаннями та відповідями у форматі інтерв'ю за допомогою вбудованого скілу `/grill-me` у Antigravity CLI.
 - [03-prompt-layout-fix](./ai/03-prompt-layout-fix.md) - фідбек на нечитабельність частини sql-запиту у одному з рендерів.
+- [04-prompt-layout-grouping.md](./ai/04-prompt-layout-grouping.md) - винесення зовнішнього сервісу/актора (Payment Gateway) за межі внутрішніх модулів системи.
 
 ## Топ-3 розбіжності
 
