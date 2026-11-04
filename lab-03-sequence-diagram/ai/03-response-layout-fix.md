@@ -1,0 +1,86 @@
+# Відповідь моделі: Форматування SQL-запиту у Сценарії 3 (Ітерація 3)
+
+Для покращення читабельності та уникнення обрізання тексту в графічному експорті [render/render-03-validation-error.png](../render/render-03-validation-error.png), SQL-запит перевірки зайнятих місць та існуючої заявки у моделі [model/model-03-validation-error.mmd](../model/model-03-validation-error.mmd) розбито з 3 на 4 збалансовані рядки за допомогою тегів `<br/>`:
+
+```sql
+SELECT COUNT(*) as active_count, (SELECT payment_status, registered_at
+FROM tournament_registration WHERE tournament_id = 5 AND player_id = 42) as existing_reg
+FROM tournament_registration WHERE tournament_id = 5
+AND (payment_status = 'PAID' OR (payment_status = 'PENDING' AND registered_at + INTERVAL '15 minutes' > NOW()))
+```
+
+---
+
+## Оновлений блок моделі Сценарію 3 (`model/model-03-validation-error.mmd`)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Player as Player (Гравець)
+    participant WebUI as Frontend (WebUI)
+    participant Auth as AuthMiddleware
+    participant RegCtrl as RegistrationController
+    participant RegSvc as RegistrationService
+    participant PaySvc as PaymentService
+    participant DB as Database (PostgreSQL)
+
+    Player ->> WebUI: clickRegister(tournamentId=5)
+    activate WebUI
+    WebUI ->> Auth: POST /api/tournaments/5/registrations<br/>Header: Authorization: Bearer jwt_token
+    activate Auth
+    Auth ->> Auth: verifyJwtAndRole(jwt)<br/>[claims: user_id=10, role=USER, player_id=42]
+    Auth ->> RegCtrl: forward(req, AuthContext(userId=10, playerId=42))
+    activate RegCtrl
+    RegCtrl ->> RegSvc: registerPlayer(playerId=42, tournamentId=5)
+    activate RegSvc
+
+    RegSvc ->> DB: SELECT status, registration_deadline, max_participants FROM tournament WHERE tournament_id = 5
+    activate DB
+    DB -->> RegSvc: tournament(status='REGISTRATION_OPEN', deadline, max=32)
+    deactivate DB
+
+    RegSvc ->> DB: SELECT COUNT(*) as active_count, (SELECT payment_status, registered_at<br/>FROM tournament_registration WHERE tournament_id = 5 AND player_id = 42) as existing_reg<br/>FROM tournament_registration WHERE tournament_id = 5<br/>AND (payment_status = 'PAID' OR (payment_status = 'PENDING' AND registered_at + INTERVAL '15 minutes' > NOW()))
+    activate DB
+    DB -->> RegSvc: queryResult(active_count, existing_reg)
+    deactivate DB
+
+    alt [now() > registration_deadline]
+        RegSvc -->> RegCtrl: throw RegistrationClosedException()
+        RegCtrl -->> Auth: 403 Forbidden {error: "REGISTRATION_CLOSED", message: "Дедлайн минув"}
+        Auth -->> WebUI: 403 Forbidden (REGISTRATION_CLOSED)
+        WebUI -->> Player: showErrorMessage("Відхилено: час реєстрації на турнір минув")
+    else [active_count >= max_participants AND (existing_reg is NULL OR (existing_reg.status == 'PENDING' AND existing_reg.registered_at + 15m < now()))]
+        RegSvc -->> RegCtrl: throw TournamentQuotaExceededException()
+        RegCtrl -->> Auth: 409 Conflict {error: "QUOTA_EXCEEDED", message: "Всі місця зайнято"}
+        Auth -->> WebUI: 409 Conflict (QUOTA_EXCEEDED)
+        WebUI -->> Player: showErrorMessage("Відхилено: всі 32 місця на турнір заповнені (або бронь спливла)")
+    else [existing_reg.status == 'PAID']
+        RegSvc -->> RegCtrl: throw DuplicateRegistrationException()
+        RegCtrl -->> Auth: 409 Conflict {error: "DUPLICATE_PAID", message: "Участь вже оплачено"}
+        Auth -->> WebUI: 409 Conflict (DUPLICATE_PAID)
+        WebUI -->> Player: showErrorMessage("Відхилено: ви вже зареєстровані та оплатили участь")
+    else [existing_reg.status == 'PENDING']
+        Note over RegSvc, DB: Заявка у PENDING: відновлення сесії без 409 помилки
+        opt [existing_reg.registered_at + 15m < now()]
+            RegSvc ->> DB: UPDATE tournament_registration SET registered_at = NOW() WHERE tournament_registration_id = 101
+            activate DB
+            DB -->> RegSvc: updated (1 row)
+            deactivate DB
+        end
+        RegSvc ->> PaySvc: getCheckoutSession(regId=101)
+        activate PaySvc
+        PaySvc -->> RegSvc: checkoutUrl
+        deactivate PaySvc
+        RegSvc -->> RegCtrl: ResumeResult(status='PENDING', checkoutUrl)
+        RegCtrl -->> Auth: 200 OK {status: 'PENDING', checkout_url}
+        Auth -->> WebUI: 200 OK (checkout_url)
+        WebUI -->> Player: redirect(checkoutUrl)
+    end
+
+    Note over RegSvc, DB: Інваріант цілісності: новий INSERT не викликається при відмові
+
+    deactivate RegSvc
+    deactivate RegCtrl
+    deactivate Auth
+    deactivate WebUI
+```

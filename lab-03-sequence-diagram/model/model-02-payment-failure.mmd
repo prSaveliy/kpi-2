@@ -1,0 +1,95 @@
+sequenceDiagram
+    autonumber
+    actor Player as Player (Гравець)
+    participant WebUI as Frontend (WebUI)
+    participant Auth as AuthMiddleware
+    participant RegCtrl as RegistrationController
+    participant RegSvc as RegistrationService
+    participant PaySvc as PaymentService
+    participant DB as Database (PostgreSQL)
+    actor Gateway as Payment Gateway
+
+    Note over Player, Gateway: Первинна спроба списання у шлюзі зазнає невдачі
+
+    Player ->> Gateway: submitPayment(cardDetails, session_id='cs_101')
+    activate Gateway
+    Gateway ->> Gateway: processCharge(500.00) -> FAILED (Card Declined)
+    Gateway -) RegCtrl: POST /api/webhooks/payment<br/>Header: Stripe-Signature<br/>Payload: {event: 'charge.failed', reg_id: 101, reason: 'CARD_DECLINED'}
+    activate RegCtrl
+    RegCtrl ->> PaySvc: handleWebhook(payload, signature)
+    activate PaySvc
+    PaySvc ->> PaySvc: verifyHmacSignature(payload, signature, secret)
+    PaySvc ->> DB: SELECT payment_status, registered_at FROM tournament_registration WHERE tournament_registration_id = 101
+    activate DB
+    DB -->> PaySvc: status = 'PENDING', registered_at
+    deactivate DB
+    Note over PaySvc, DB: Заявка залишається 'PENDING' (REQ-06) — діє 15-хвилинне вікно резервування
+    PaySvc -->> RegCtrl: webhookAcknowledged
+    deactivate PaySvc
+    RegCtrl -->> Gateway: 200 OK (Webhook Acknowledged)
+    deactivate RegCtrl
+
+    Gateway -->> WebUI: redirect(failure_url?reg_id=101&reason=CARD_DECLINED)
+    deactivate Gateway
+    activate WebUI
+    WebUI -->> Player: showPaymentError("Картку відхилено. Бажаєте спробувати знову?")
+    deactivate WebUI
+
+    loop [поки attempts < 3 та now() <= min(deadline, registered_at + 15 min)]
+        Player ->> WebUI: clickRetryPayment(registrationId=101)
+        activate WebUI
+        WebUI ->> Auth: POST /api/registrations/101/retry-payment<br/>Header: Authorization: Bearer jwt_token
+        activate Auth
+        Auth ->> Auth: verifyJwtAndRole(jwt)
+        Auth ->> RegCtrl: forward(req, AuthContext(userId=10, playerId=42))
+        activate RegCtrl
+        RegCtrl ->> PaySvc: createRetrySession(registrationId=101, playerId=42)
+        activate PaySvc
+        PaySvc ->> DB: SELECT tr.payment_status, tr.registered_at, t.registration_deadline, t.entry_fee<br/>FROM tournament_registration tr JOIN tournament t ON tr.tournament_id = t.tournament_id<br/>WHERE tr.tournament_registration_id = 101
+        activate DB
+        DB -->> PaySvc: status='PENDING', registered_at, deadline, fee=500.00
+        deactivate DB
+        PaySvc ->> Gateway: POST /v1/checkout/sessions<br/>{amount: 500.00, reg_id: 101, expires_in: min(15m, deadline)}
+        activate Gateway
+        Gateway -->> PaySvc: 200 OK {session_id: 'cs_101_retry', checkout_url}
+        deactivate Gateway
+        PaySvc -->> RegCtrl: RetrySession(checkoutUrl='https://pay.gateway.com/pay/cs_101_retry')
+        deactivate PaySvc
+        RegCtrl -->> Auth: 200 OK {checkout_url}
+        deactivate RegCtrl
+        Auth -->> WebUI: 200 OK (checkout_url)
+        deactivate Auth
+        WebUI -->> Player: redirect(newCheckoutUrl)
+        deactivate WebUI
+
+        alt [успіх повторного списання]
+            Player ->> Gateway: submitPayment(newCardDetails, cs_101_retry)
+            activate Gateway
+            Gateway ->> Gateway: processCharge(500.00) -> SUCCESS
+            Gateway -) RegCtrl: POST /api/webhooks/payment<br/>Payload: {event: 'charge.successful', reg_id: 101}
+            deactivate Gateway
+            activate RegCtrl
+            RegCtrl ->> RegSvc: confirmPayment(registrationId=101)
+            activate RegSvc
+            RegSvc ->> DB: UPDATE tournament_registration<br/>SET payment_status = 'PAID'<br/>WHERE tournament_registration_id = 101 AND payment_status = 'PENDING'
+            activate DB
+            DB -->> RegSvc: updated (1 row)
+            deactivate DB
+            RegSvc -) WebUI: pushEvent("REGISTRATION_CONFIRMED", {regId: 101, status: 'PAID'})
+            activate WebUI
+            WebUI -->> Player: showNotification("Оплату успішно підтверджено!")
+            deactivate WebUI
+            RegSvc -->> RegCtrl: paymentConfirmed
+            deactivate RegSvc
+            RegCtrl -->> Gateway: 200 OK
+            deactivate RegCtrl
+        else [тайм-аут сесії або вичерпання спроб]
+            activate RegCtrl
+            RegCtrl -) WebUI: pushEvent("SESSION_EXPIRED", {regId: 101})
+            activate WebUI
+            WebUI -->> Player: showPaymentError("Час сесії оплати вичерпано. Бронь знято, статус заявки залишається PENDING.")
+            deactivate WebUI
+            Note over RegCtrl, DB: Статус залишається 'PENDING' (без CANCELLED), 15-хв TTL спливає, слот стає доступним іншим
+            deactivate RegCtrl
+        end
+    end
