@@ -6,8 +6,8 @@ sequenceDiagram
     participant RegCtrl as RegistrationController
     participant RegSvc as RegistrationService
     participant PaySvc as PaymentService
-    actor Gateway as Payment Gateway
     participant DB as Database (PostgreSQL)
+    actor Gateway as Payment Gateway
 
     Note over Player, Gateway: Первинна спроба списання у шлюзі зазнає невдачі
 
