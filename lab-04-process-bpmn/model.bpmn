@@ -1,0 +1,1223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_BilliardCRM_UC04_UC06"
+                  targetNamespace="http://billiard-crm.kpi.ua/bpmn/uc04-registration">
+
+  <!-- ==================== COLLABORATION (POOLS & MESSAGE FLOWS) ==================== -->
+  <bpmn:collaboration id="Collaboration_TournamentRegistration">
+    <bpmn:participant id="Participant_User" name="Користувач" processRef="Process_User" />
+    <bpmn:participant id="Participant_CRM" name="Billiard CRM" processRef="Process_CRM" />
+    <bpmn:participant id="Participant_Gateway" name="Payment Gateway" />
+
+    <!-- Message Flows between User, Billiard CRM, and Payment Gateway -->
+    <bpmn:messageFlow id="MF_RegisterReq" name="POST /registrations (JWT)" sourceRef="Task_User_ClickRegister" targetRef="StartEvent_CRM_RegReq" />
+    <bpmn:messageFlow id="MF_RejectResp" name="403 Forbidden / 409 Conflict" sourceRef="Task_CRM_SendReject" targetRef="Event_User_CatchReject" />
+    <bpmn:messageFlow id="MF_CreateSession" name="POST /v1/checkout/sessions" sourceRef="Task_CRM_InitCheckout" targetRef="Participant_Gateway" />
+    <bpmn:messageFlow id="MF_SessionCreated" name="200 OK {session_id, checkout_url}" sourceRef="Participant_Gateway" targetRef="Task_CRM_InitCheckout" />
+    <bpmn:messageFlow id="MF_CheckoutUrl" name="201 / 200 {checkout_url}" sourceRef="Task_CRM_InitCheckout" targetRef="Event_User_CatchCheckout" />
+    <bpmn:messageFlow id="MF_SubmitCard" name="submitPayment(cardDetails)" sourceRef="Task_User_SubmitPayment" targetRef="Participant_Gateway" />
+    <bpmn:messageFlow id="MF_WebhookSuccess" name="Webhook charge.successful" sourceRef="Participant_Gateway" targetRef="Event_CRM_WebhookSuccess" />
+    <bpmn:messageFlow id="MF_WebhookFailed" name="Webhook charge.failed" sourceRef="Participant_Gateway" targetRef="Event_CRM_WebhookFailed" />
+    <bpmn:messageFlow id="MF_WebhookFailAck" name="200 OK (Ack)" sourceRef="Task_CRM_HandleFail" targetRef="Participant_Gateway" />
+    <bpmn:messageFlow id="MF_RedirectFail" name="redirect(failure_url)" sourceRef="Participant_Gateway" targetRef="Event_User_CatchPayError" />
+    <bpmn:messageFlow id="MF_RetryReq" name="POST /retry-payment" sourceRef="Task_User_ClickRetry" targetRef="Event_CRM_CatchRetry" />
+    <bpmn:messageFlow id="MF_RetrySessionReq" name="POST /v1/checkout/sessions" sourceRef="Task_CRM_CreateRetrySession" targetRef="Participant_Gateway" />
+    <bpmn:messageFlow id="MF_RetrySessionResp" name="200 OK {new_checkout_url}" sourceRef="Participant_Gateway" targetRef="Task_CRM_CreateRetrySession" />
+    <bpmn:messageFlow id="MF_RetryCheckoutUrl" name="200 OK {new_checkout_url}" sourceRef="Task_CRM_CreateRetrySession" targetRef="Event_User_CatchRetryUrl" />
+    <bpmn:messageFlow id="MF_PushExpired" name="pushEvent(SESSION_EXPIRED)" sourceRef="Task_CRM_ExpireSession" targetRef="Event_User_CatchExpired" />
+    <bpmn:messageFlow id="MF_PushConfirmed" name="pushEvent(REGISTRATION_CONFIRMED)" sourceRef="Task_CRM_PushConfirmed" targetRef="Event_User_CatchConfirmed" />
+    <bpmn:messageFlow id="MF_WebhookSuccessAck" name="200 OK (Webhook Ack)" sourceRef="Task_CRM_AckWebhook" targetRef="Participant_Gateway" />
+  </bpmn:collaboration>
+
+  <!-- ==================== POOL 1: КОРИСТУВАЧ ==================== -->
+  <bpmn:process id="Process_User" isExecutable="false">
+    <bpmn:startEvent id="StartEvent_User" name="Намір взяти участь у турнірі">
+      <bpmn:outgoing>Flow_U1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:userTask id="Task_User_ClickRegister" name="Натиснути «Зареєструватися» (clickRegister)">
+      <bpmn:incoming>Flow_U1</bpmn:incoming>
+      <bpmn:outgoing>Flow_U2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:eventBasedGateway id="Gateway_User_InitResp" name="Очікування відповіді CRM">
+      <bpmn:incoming>Flow_U2</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_ToReject</bpmn:outgoing>
+      <bpmn:outgoing>Flow_U_ToCheckout</bpmn:outgoing>
+      <bpmn:outgoing>Flow_U_ToFreeConfirm</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+
+    <!-- Відмова валідації (403 / 409) -->
+    <bpmn:intermediateCatchEvent id="Event_User_CatchReject" name="Отримано помилку 403 / 409">
+      <bpmn:incoming>Flow_U_ToReject</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_Reject1</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MED_User_CatchReject" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:userTask id="Task_User_ViewError" name="Переглянути повідомлення про помилку">
+      <bpmn:incoming>Flow_U_Reject1</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_Reject2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="EndEvent_User_Rejected" name="У реєстрації відмовлено">
+      <bpmn:incoming>Flow_U_Reject2</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Отримання посилання на оплату -->
+    <bpmn:intermediateCatchEvent id="Event_User_CatchCheckout" name="Отримано checkout_url">
+      <bpmn:incoming>Flow_U_ToCheckout</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_Checkout1</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MED_User_CatchCheckout" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:exclusiveGateway id="Gateway_User_PayLoopMerge">
+      <bpmn:incoming>Flow_U_Checkout1</bpmn:incoming>
+      <bpmn:incoming>Flow_U_RetryLoopBack</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_ToSubmitCard</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Task_User_SubmitPayment" name="Ввести реквізити картки та оплатити (submitPayment)">
+      <bpmn:incoming>Flow_U_ToSubmitCard</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_AfterSubmitCard</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:eventBasedGateway id="Gateway_User_WaitPayResult" name="Результат оплати">
+      <bpmn:incoming>Flow_U_AfterSubmitCard</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_ToPaySuccess</bpmn:outgoing>
+      <bpmn:outgoing>Flow_U_ToPayError</bpmn:outgoing>
+      <bpmn:outgoing>Flow_U_ToExpired</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+
+    <!-- Гілка помилки оплати та повторної спроби -->
+    <bpmn:intermediateCatchEvent id="Event_User_CatchPayError" name="Помилка оплати (failure_url)">
+      <bpmn:incoming>Flow_U_ToPayError</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_PayError1</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MED_User_CatchPayError" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:exclusiveGateway id="Gateway_User_RetryChoice" name="Повторити? (attempts &lt; 3)">
+      <bpmn:incoming>Flow_U_PayError1</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_RetryYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_U_RetryNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Task_User_ClickRetry" name="Натиснути «Спробувати знову» (clickRetryPayment)">
+      <bpmn:incoming>Flow_U_RetryYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_Retry1</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:intermediateCatchEvent id="Event_User_CatchRetryUrl" name="Отримано новий checkout_url">
+      <bpmn:incoming>Flow_U_Retry1</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_RetryLoopBack</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MED_User_CatchRetryUrl" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:endEvent id="EndEvent_User_GiveUp" name="Оплату скасовано">
+      <bpmn:incoming>Flow_U_RetryNo</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Гілка тайм-ауту броні -->
+    <bpmn:intermediateCatchEvent id="Event_User_CatchExpired" name="Сповіщення SESSION_EXPIRED">
+      <bpmn:incoming>Flow_U_ToExpired</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_Expired1</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MED_User_CatchExpired" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:endEvent id="EndEvent_User_Expired" name="Час броні вичерпано">
+      <bpmn:incoming>Flow_U_Expired1</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Гілка підтвердження участі -->
+    <bpmn:intermediateCatchEvent id="Event_User_CatchConfirmed" name="Сповіщення REGISTRATION_CONFIRMED">
+      <bpmn:incoming>Flow_U_ToPaySuccess</bpmn:incoming>
+      <bpmn:incoming>Flow_U_ToFreeConfirm</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_Confirmed1</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MED_User_CatchConfirmed" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:userTask id="Task_User_ViewSuccess" name="Переглянути підтвердження реєстрації (showNotification)">
+      <bpmn:incoming>Flow_U_Confirmed1</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_Confirmed2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="EndEvent_User_Success" name="Участь у турнірі підтверджено">
+      <bpmn:incoming>Flow_U_Confirmed2</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Sequence Flows in Process_User -->
+    <bpmn:sequenceFlow id="Flow_U1" sourceRef="StartEvent_User" targetRef="Task_User_ClickRegister" />
+    <bpmn:sequenceFlow id="Flow_U2" sourceRef="Task_User_ClickRegister" targetRef="Gateway_User_InitResp" />
+    <bpmn:sequenceFlow id="Flow_U_ToReject" sourceRef="Gateway_User_InitResp" targetRef="Event_User_CatchReject" />
+    <bpmn:sequenceFlow id="Flow_U_Reject1" sourceRef="Event_User_CatchReject" targetRef="Task_User_ViewError" />
+    <bpmn:sequenceFlow id="Flow_U_Reject2" sourceRef="Task_User_ViewError" targetRef="EndEvent_User_Rejected" />
+    <bpmn:sequenceFlow id="Flow_U_ToCheckout" sourceRef="Gateway_User_InitResp" targetRef="Event_User_CatchCheckout" />
+    <bpmn:sequenceFlow id="Flow_U_ToFreeConfirm" name="entry_fee == 0" sourceRef="Gateway_User_InitResp" targetRef="Event_User_CatchConfirmed" />
+    <bpmn:sequenceFlow id="Flow_U_Checkout1" sourceRef="Event_User_CatchCheckout" targetRef="Gateway_User_PayLoopMerge" />
+    <bpmn:sequenceFlow id="Flow_U_ToSubmitCard" sourceRef="Gateway_User_PayLoopMerge" targetRef="Task_User_SubmitPayment" />
+    <bpmn:sequenceFlow id="Flow_U_AfterSubmitCard" sourceRef="Task_User_SubmitPayment" targetRef="Gateway_User_WaitPayResult" />
+    <bpmn:sequenceFlow id="Flow_U_ToPaySuccess" sourceRef="Gateway_User_WaitPayResult" targetRef="Event_User_CatchConfirmed" />
+    <bpmn:sequenceFlow id="Flow_U_ToPayError" sourceRef="Gateway_User_WaitPayResult" targetRef="Event_User_CatchPayError" />
+    <bpmn:sequenceFlow id="Flow_U_PayError1" sourceRef="Event_User_CatchPayError" targetRef="Gateway_User_RetryChoice" />
+    <bpmn:sequenceFlow id="Flow_U_RetryYes" name="Так" sourceRef="Gateway_User_RetryChoice" targetRef="Task_User_ClickRetry" />
+    <bpmn:sequenceFlow id="Flow_U_Retry1" sourceRef="Task_User_ClickRetry" targetRef="Event_User_CatchRetryUrl" />
+    <bpmn:sequenceFlow id="Flow_U_RetryLoopBack" sourceRef="Event_User_CatchRetryUrl" targetRef="Gateway_User_PayLoopMerge" />
+    <bpmn:sequenceFlow id="Flow_U_RetryNo" name="Ні" sourceRef="Gateway_User_RetryChoice" targetRef="EndEvent_User_GiveUp" />
+    <bpmn:sequenceFlow id="Flow_U_ToExpired" sourceRef="Gateway_User_WaitPayResult" targetRef="Event_User_CatchExpired" />
+    <bpmn:sequenceFlow id="Flow_U_Expired1" sourceRef="Event_User_CatchExpired" targetRef="EndEvent_User_Expired" />
+    <bpmn:sequenceFlow id="Flow_U_Confirmed1" sourceRef="Event_User_CatchConfirmed" targetRef="Task_User_ViewSuccess" />
+    <bpmn:sequenceFlow id="Flow_U_Confirmed2" sourceRef="Task_User_ViewSuccess" targetRef="EndEvent_User_Success" />
+  </bpmn:process>
+
+  <!-- ==================== POOL 2: BILLIARD CRM ==================== -->
+  <bpmn:process id="Process_CRM" isExecutable="true">
+    <!-- Етап 1: Ініціація та перевірка умов допуску -->
+    <bpmn:startEvent id="StartEvent_CRM_RegReq" name="Отримано POST /registrations">
+      <bpmn:outgoing>Flow_C1</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MED_CRM_RegReq" />
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="Task_CRM_Auth" name="Валідувати JWT-токен та роль гравця (verifyJwtAndRole)">
+      <bpmn:incoming>Flow_C1</bpmn:incoming>
+      <bpmn:outgoing>Flow_C2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_CRM_CheckDB" name="Перевірити турнір (FOR UPDATE), квоту з 15-хв TTL та existing_reg">
+      <bpmn:incoming>Flow_C2</bpmn:incoming>
+      <bpmn:outgoing>Flow_C3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_CRM_Validate" name="Результат перевірки?">
+      <bpmn:incoming>Flow_C3</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_ToReject</bpmn:outgoing>
+      <bpmn:outgoing>Flow_C_ToPendingResume</bpmn:outgoing>
+      <bpmn:outgoing>Flow_C_ToNewInsert</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Гілка 1: Відмова (403 / 409) -->
+    <bpmn:serviceTask id="Task_CRM_SendReject" name="Повернути помилку 403 / 409 (без INSERT у БД)">
+      <bpmn:incoming>Flow_C_ToReject</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_RejectEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_CRM_Rejected" name="Заявку відхилено">
+      <bpmn:incoming>Flow_C_RejectEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Гілка 2: Відновлення існуючої заявки PENDING -->
+    <bpmn:exclusiveGateway id="Gateway_CRM_CheckTtlExpired" name="TTL &gt; 15 хв?">
+      <bpmn:incoming>Flow_C_ToPendingResume</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_TtlExpiredYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_C_TtlExpiredNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_CRM_UpdateTtl" name="Оновити час броні (UPDATE registered_at = NOW())">
+      <bpmn:incoming>Flow_C_TtlExpiredYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_AfterUpdateTtl</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_CRM_MergePending">
+      <bpmn:incoming>Flow_C_AfterUpdateTtl</bpmn:incoming>
+      <bpmn:incoming>Flow_C_TtlExpiredNo</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_PendingMerged</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Гілка 3: Створення нової заявки -->
+    <bpmn:serviceTask id="Task_CRM_InsertPending" name="Створити заявку PENDING (INSERT tournament_registration)">
+      <bpmn:incoming>Flow_C_ToNewInsert</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_AfterInsert</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Етап 2: Перевірка платності та створення Checkout-сесії -->
+    <bpmn:exclusiveGateway id="Gateway_CRM_MergeBeforeFee">
+      <bpmn:incoming>Flow_C_PendingMerged</bpmn:incoming>
+      <bpmn:incoming>Flow_C_AfterInsert</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_ToCheckFee</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:exclusiveGateway id="Gateway_CRM_CheckFee" name="entry_fee &gt; 0?">
+      <bpmn:incoming>Flow_C_ToCheckFee</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_FeePositive</bpmn:outgoing>
+      <bpmn:outgoing>Flow_C_FeeZero</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_CRM_InitCheckout" name="Ініціювати сесію оплати (initiateCheckout)">
+      <bpmn:incoming>Flow_C_FeePositive</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_AfterInitCheckout</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Етап 3: Оплата, повторні спроби (Retry) та очікування подій -->
+    <bpmn:exclusiveGateway id="Gateway_CRM_EventLoopMerge">
+      <bpmn:incoming>Flow_C_AfterInitCheckout</bpmn:incoming>
+      <bpmn:incoming>Flow_C_RetryLoopBack</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_ToWaitEvents</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:eventBasedGateway id="Gateway_CRM_WaitEvents" name="Очікування Webhook або TTL">
+      <bpmn:incoming>Flow_C_ToWaitEvents</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_ToWebhookSuccess</bpmn:outgoing>
+      <bpmn:outgoing>Flow_C_ToWebhookFailed</bpmn:outgoing>
+      <bpmn:outgoing>Flow_C_ToTimerTtl</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+
+    <!-- Подія 1: Webhook charge.successful -->
+    <bpmn:intermediateCatchEvent id="Event_CRM_WebhookSuccess" name="Webhook charge.successful">
+      <bpmn:incoming>Flow_C_ToWebhookSuccess</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_AfterWebhookSuccess</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MED_CRM_WebhookSuccess" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:serviceTask id="Task_CRM_VerifySuccessSig" name="Перевірити HMAC-підпис вебхука (verifyHmacSignature)">
+      <bpmn:incoming>Flow_C_AfterWebhookSuccess</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_VerifiedSuccess</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Подія 2: Webhook charge.failed -->
+    <bpmn:intermediateCatchEvent id="Event_CRM_WebhookFailed" name="Webhook charge.failed">
+      <bpmn:incoming>Flow_C_ToWebhookFailed</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_AfterWebhookFailed</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MED_CRM_WebhookFailed" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:serviceTask id="Task_CRM_HandleFail" name="Перевірити підпис, зберегти PENDING та відповісти 200 OK">
+      <bpmn:incoming>Flow_C_AfterWebhookFailed</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_ToCheckRetry</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_CRM_CheckRetry" name="attempts &lt; 3 та TTL дійсний?">
+      <bpmn:incoming>Flow_C_ToCheckRetry</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_AllowRetryYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_C_AllowRetryNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:intermediateCatchEvent id="Event_CRM_CatchRetry" name="Отримано POST /retry-payment">
+      <bpmn:incoming>Flow_C_AllowRetryYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_AfterCatchRetry</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MED_CRM_CatchRetry" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:serviceTask id="Task_CRM_CreateRetrySession" name="Створити нову Checkout-сесію (createRetrySession)">
+      <bpmn:incoming>Flow_C_AfterCatchRetry</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_RetryLoopBack</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Подія 3: Тайм-аут броні min(15 хв, deadline) -->
+    <bpmn:intermediateCatchEvent id="Event_CRM_TimerTtl" name="Тайм-аут min(15 хв, deadline)">
+      <bpmn:incoming>Flow_C_ToTimerTtl</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_TimerTriggered</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TED_CRM_TimerTtl" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:exclusiveGateway id="Gateway_CRM_MergeExpire">
+      <bpmn:incoming>Flow_C_TimerTriggered</bpmn:incoming>
+      <bpmn:incoming>Flow_C_AllowRetryNo</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_ToExpireTask</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_CRM_ExpireSession" name="Залишити PENDING (слот вільний), надіслати SESSION_EXPIRED">
+      <bpmn:incoming>Flow_C_ToExpireTask</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_ToExpireEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_CRM_Expired" name="Сесію завершено за тайм-аутом">
+      <bpmn:incoming>Flow_C_ToExpireEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Етап 4: Паралельне підтвердження участі та сповіщення -->
+    <bpmn:exclusiveGateway id="Gateway_CRM_MergeToConfirm">
+      <bpmn:incoming>Flow_C_VerifiedSuccess</bpmn:incoming>
+      <bpmn:incoming>Flow_C_FeeZero</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_ToParFork</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:parallelGateway id="Gateway_CRM_ParFork" name="Fork">
+      <bpmn:incoming>Flow_C_ToParFork</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_ParBranch1</bpmn:outgoing>
+      <bpmn:outgoing>Flow_C_ParBranch2</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
+    <bpmn:serviceTask id="Task_CRM_UpdatePaid" name="Оновити статус у БД на PAID (UPDATE tournament_registration)">
+      <bpmn:incoming>Flow_C_ParBranch1</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_ParJoin1</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_CRM_PushConfirmed" name="Надіслати pushEvent(REGISTRATION_CONFIRMED)">
+      <bpmn:incoming>Flow_C_ParBranch2</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_ParJoin2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:parallelGateway id="Gateway_CRM_ParJoin" name="Join">
+      <bpmn:incoming>Flow_C_ParJoin1</bpmn:incoming>
+      <bpmn:incoming>Flow_C_ParJoin2</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_AfterParJoin</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
+    <bpmn:serviceTask id="Task_CRM_AckWebhook" name="Підтвердити вебхук (200 OK)">
+      <bpmn:incoming>Flow_C_AfterParJoin</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_ToSuccessEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_CRM_Success" name="Реєстрацію успішно підтверджено">
+      <bpmn:incoming>Flow_C_ToSuccessEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Sequence Flows in Process_CRM -->
+    <bpmn:sequenceFlow id="Flow_C1" sourceRef="StartEvent_CRM_RegReq" targetRef="Task_CRM_Auth" />
+    <bpmn:sequenceFlow id="Flow_C2" sourceRef="Task_CRM_Auth" targetRef="Task_CRM_CheckDB" />
+    <bpmn:sequenceFlow id="Flow_C3" sourceRef="Task_CRM_CheckDB" targetRef="Gateway_CRM_Validate" />
+    <bpmn:sequenceFlow id="Flow_C_ToReject" name="Порушено інваріант (403/409)" sourceRef="Gateway_CRM_Validate" targetRef="Task_CRM_SendReject" />
+    <bpmn:sequenceFlow id="Flow_C_RejectEnd" sourceRef="Task_CRM_SendReject" targetRef="EndEvent_CRM_Rejected" />
+    <bpmn:sequenceFlow id="Flow_C_ToPendingResume" name="Існує PENDING" sourceRef="Gateway_CRM_Validate" targetRef="Gateway_CRM_CheckTtlExpired" />
+    <bpmn:sequenceFlow id="Flow_C_TtlExpiredYes" name="Так" sourceRef="Gateway_CRM_CheckTtlExpired" targetRef="Task_CRM_UpdateTtl" />
+    <bpmn:sequenceFlow id="Flow_C_AfterUpdateTtl" sourceRef="Task_CRM_UpdateTtl" targetRef="Gateway_CRM_MergePending" />
+    <bpmn:sequenceFlow id="Flow_C_TtlExpiredNo" name="Ні" sourceRef="Gateway_CRM_CheckTtlExpired" targetRef="Gateway_CRM_MergePending" />
+    <bpmn:sequenceFlow id="Flow_C_PendingMerged" sourceRef="Gateway_CRM_MergePending" targetRef="Gateway_CRM_MergeBeforeFee" />
+    <bpmn:sequenceFlow id="Flow_C_ToNewInsert" name="Нова заявка" sourceRef="Gateway_CRM_Validate" targetRef="Task_CRM_InsertPending" />
+    <bpmn:sequenceFlow id="Flow_C_AfterInsert" sourceRef="Task_CRM_InsertPending" targetRef="Gateway_CRM_MergeBeforeFee" />
+    <bpmn:sequenceFlow id="Flow_C_ToCheckFee" sourceRef="Gateway_CRM_MergeBeforeFee" targetRef="Gateway_CRM_CheckFee" />
+    <bpmn:sequenceFlow id="Flow_C_FeePositive" name="entry_fee &gt; 0" sourceRef="Gateway_CRM_CheckFee" targetRef="Task_CRM_InitCheckout" />
+    <bpmn:sequenceFlow id="Flow_C_FeeZero" name="entry_fee == 0" sourceRef="Gateway_CRM_CheckFee" targetRef="Gateway_CRM_MergeToConfirm" />
+    <bpmn:sequenceFlow id="Flow_C_AfterInitCheckout" sourceRef="Task_CRM_InitCheckout" targetRef="Gateway_CRM_EventLoopMerge" />
+    <bpmn:sequenceFlow id="Flow_C_ToWaitEvents" sourceRef="Gateway_CRM_EventLoopMerge" targetRef="Gateway_CRM_WaitEvents" />
+    <bpmn:sequenceFlow id="Flow_C_ToWebhookSuccess" sourceRef="Gateway_CRM_WaitEvents" targetRef="Event_CRM_WebhookSuccess" />
+    <bpmn:sequenceFlow id="Flow_C_AfterWebhookSuccess" sourceRef="Event_CRM_WebhookSuccess" targetRef="Task_CRM_VerifySuccessSig" />
+    <bpmn:sequenceFlow id="Flow_C_VerifiedSuccess" sourceRef="Task_CRM_VerifySuccessSig" targetRef="Gateway_CRM_MergeToConfirm" />
+    <bpmn:sequenceFlow id="Flow_C_ToWebhookFailed" sourceRef="Gateway_CRM_WaitEvents" targetRef="Event_CRM_WebhookFailed" />
+    <bpmn:sequenceFlow id="Flow_C_AfterWebhookFailed" sourceRef="Event_CRM_WebhookFailed" targetRef="Task_CRM_HandleFail" />
+    <bpmn:sequenceFlow id="Flow_C_ToCheckRetry" sourceRef="Task_CRM_HandleFail" targetRef="Gateway_CRM_CheckRetry" />
+    <bpmn:sequenceFlow id="Flow_C_AllowRetryYes" name="Так" sourceRef="Gateway_CRM_CheckRetry" targetRef="Event_CRM_CatchRetry" />
+    <bpmn:sequenceFlow id="Flow_C_AfterCatchRetry" sourceRef="Event_CRM_CatchRetry" targetRef="Task_CRM_CreateRetrySession" />
+    <bpmn:sequenceFlow id="Flow_C_RetryLoopBack" sourceRef="Task_CRM_CreateRetrySession" targetRef="Gateway_CRM_EventLoopMerge" />
+    <bpmn:sequenceFlow id="Flow_C_AllowRetryNo" name="Ні" sourceRef="Gateway_CRM_CheckRetry" targetRef="Gateway_CRM_MergeExpire" />
+    <bpmn:sequenceFlow id="Flow_C_ToTimerTtl" sourceRef="Gateway_CRM_WaitEvents" targetRef="Event_CRM_TimerTtl" />
+    <bpmn:sequenceFlow id="Flow_C_TimerTriggered" sourceRef="Event_CRM_TimerTtl" targetRef="Gateway_CRM_MergeExpire" />
+    <bpmn:sequenceFlow id="Flow_C_ToExpireTask" sourceRef="Gateway_CRM_MergeExpire" targetRef="Task_CRM_ExpireSession" />
+    <bpmn:sequenceFlow id="Flow_C_ToExpireEnd" sourceRef="Task_CRM_ExpireSession" targetRef="EndEvent_CRM_Expired" />
+    <bpmn:sequenceFlow id="Flow_C_ToParFork" sourceRef="Gateway_CRM_MergeToConfirm" targetRef="Gateway_CRM_ParFork" />
+    <bpmn:sequenceFlow id="Flow_C_ParBranch1" sourceRef="Gateway_CRM_ParFork" targetRef="Task_CRM_UpdatePaid" />
+    <bpmn:sequenceFlow id="Flow_C_ParBranch2" sourceRef="Gateway_CRM_ParFork" targetRef="Task_CRM_PushConfirmed" />
+    <bpmn:sequenceFlow id="Flow_C_ParJoin1" sourceRef="Task_CRM_UpdatePaid" targetRef="Gateway_CRM_ParJoin" />
+    <bpmn:sequenceFlow id="Flow_C_ParJoin2" sourceRef="Task_CRM_PushConfirmed" targetRef="Gateway_CRM_ParJoin" />
+    <bpmn:sequenceFlow id="Flow_C_AfterParJoin" sourceRef="Gateway_CRM_ParJoin" targetRef="Task_CRM_AckWebhook" />
+    <bpmn:sequenceFlow id="Flow_C_ToSuccessEnd" sourceRef="Task_CRM_AckWebhook" targetRef="EndEvent_CRM_Success" />
+  </bpmn:process>
+
+  <!-- ==================== BPMN DI (LAYOUT & COORDINATES) ==================== -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_TournamentRegistration">
+
+      <!-- POOLS -->
+      <bpmndi:BPMNShape id="Shape_Participant_User" bpmnElement="Participant_User" isHorizontal="true">
+        <dc:Bounds x="120" y="50" width="3020" height="430" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Participant_CRM" bpmnElement="Participant_CRM" isHorizontal="true">
+        <dc:Bounds x="120" y="550" width="3020" height="580" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Participant_Gateway" bpmnElement="Participant_Gateway" isHorizontal="true">
+        <dc:Bounds x="120" y="1210" width="3020" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- ==================== SHAPES IN POOL 1: USER ==================== -->
+      <bpmndi:BPMNShape id="Shape_StartEvent_User" bpmnElement="StartEvent_User">
+        <dc:Bounds x="192" y="232" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="165" y="275" width="90" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_User_ClickRegister" bpmnElement="Task_User_ClickRegister">
+        <dc:Bounds x="280" y="210" width="150" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_User_InitResp" bpmnElement="Gateway_User_InitResp">
+        <dc:Bounds x="485" y="225" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="415" y="192" width="80" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Event_User_CatchReject" bpmnElement="Event_User_CatchReject">
+        <dc:Bounds x="952" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="920" y="66" width="100" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_User_ViewError" bpmnElement="Task_User_ViewError">
+        <dc:Bounds x="1040" y="80" width="140" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EndEvent_User_Rejected" bpmnElement="EndEvent_User_Rejected">
+        <dc:Bounds x="1222" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1200" y="145" width="80" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Event_User_CatchCheckout" bpmnElement="Event_User_CatchCheckout">
+        <dc:Bounds x="1407" y="232" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1387" y="196" width="76" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_User_PayLoopMerge" bpmnElement="Gateway_User_PayLoopMerge" isMarkerVisible="true">
+        <dc:Bounds x="1500" y="225" width="50" height="50" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_User_SubmitPayment" bpmnElement="Task_User_SubmitPayment">
+        <dc:Bounds x="1585" y="210" width="150" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_User_WaitPayResult" bpmnElement="Gateway_User_WaitPayResult">
+        <dc:Bounds x="1775" y="225" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1752" y="198" width="96" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Event_User_CatchPayError" bpmnElement="Event_User_CatchPayError">
+        <dc:Bounds x="1930" y="352" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1898" y="315" width="100" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_User_RetryChoice" bpmnElement="Gateway_User_RetryChoice" isMarkerVisible="true">
+        <dc:Bounds x="2015" y="345" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1995" y="310" width="90" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_User_ClickRetry" bpmnElement="Task_User_ClickRetry">
+        <dc:Bounds x="2105" y="330" width="140" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Event_User_CatchRetryUrl" bpmnElement="Event_User_CatchRetryUrl">
+        <dc:Bounds x="2285" y="352" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2255" y="315" width="96" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EndEvent_User_GiveUp" bpmnElement="EndEvent_User_GiveUp">
+        <dc:Bounds x="2022" y="420" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2066" y="431" width="98" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Event_User_CatchExpired" bpmnElement="Event_User_CatchExpired">
+        <dc:Bounds x="2447" y="352" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2330" y="356" width="110" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EndEvent_User_Expired" bpmnElement="EndEvent_User_Expired">
+        <dc:Bounds x="2532" y="352" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2515" y="395" width="70" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Event_User_CatchConfirmed" bpmnElement="Event_User_CatchConfirmed">
+        <dc:Bounds x="2659" y="232" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2500" y="260" width="155" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_User_ViewSuccess" bpmnElement="Task_User_ViewSuccess">
+        <dc:Bounds x="2745" y="210" width="150" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EndEvent_User_Success" bpmnElement="EndEvent_User_Success">
+        <dc:Bounds x="2942" y="232" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2915" y="275" width="90" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- ==================== SHAPES IN POOL 2: BILLIARD CRM ==================== -->
+      <bpmndi:BPMNShape id="Shape_StartEvent_CRM_RegReq" bpmnElement="StartEvent_CRM_RegReq">
+        <dc:Bounds x="337" y="812" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="310" y="855" width="90" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_Auth" bpmnElement="Task_CRM_Auth">
+        <dc:Bounds x="420" y="790" width="145" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_CheckDB" bpmnElement="Task_CRM_CheckDB">
+        <dc:Bounds x="605" y="790" width="155" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_CRM_Validate" bpmnElement="Gateway_CRM_Validate" isMarkerVisible="true">
+        <dc:Bounds x="800" y="805" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="735" y="772" width="70" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_SendReject" bpmnElement="Task_CRM_SendReject">
+        <dc:Bounds x="900" y="575" width="145" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EndEvent_CRM_Rejected" bpmnElement="EndEvent_CRM_Rejected">
+        <dc:Bounds x="1092" y="597" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1065" y="640" width="90" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_CRM_CheckTtlExpired" bpmnElement="Gateway_CRM_CheckTtlExpired" isMarkerVisible="true">
+        <dc:Bounds x="905" y="685" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="890" y="663" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_UpdateTtl" bpmnElement="Task_CRM_UpdateTtl">
+        <dc:Bounds x="995" y="670" width="140" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_CRM_MergePending" bpmnElement="Gateway_CRM_MergePending" isMarkerVisible="true">
+        <dc:Bounds x="1165" y="685" width="50" height="50" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_InsertPending" bpmnElement="Task_CRM_InsertPending">
+        <dc:Bounds x="960" y="790" width="155" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_CRM_MergeBeforeFee" bpmnElement="Gateway_CRM_MergeBeforeFee" isMarkerVisible="true">
+        <dc:Bounds x="1165" y="805" width="50" height="50" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_CRM_CheckFee" bpmnElement="Gateway_CRM_CheckFee" isMarkerVisible="true">
+        <dc:Bounds x="1255" y="805" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1240" y="862" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_InitCheckout" bpmnElement="Task_CRM_InitCheckout">
+        <dc:Bounds x="1350" y="790" width="150" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_CRM_EventLoopMerge" bpmnElement="Gateway_CRM_EventLoopMerge" isMarkerVisible="true">
+        <dc:Bounds x="1545" y="805" width="50" height="50" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_CRM_WaitEvents" bpmnElement="Gateway_CRM_WaitEvents">
+        <dc:Bounds x="1710" y="805" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1630" y="772" width="90" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Event_CRM_WebhookSuccess" bpmnElement="Event_CRM_WebhookSuccess">
+        <dc:Bounds x="1830" y="812" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1798" y="775" width="100" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_VerifySuccessSig" bpmnElement="Task_CRM_VerifySuccessSig">
+        <dc:Bounds x="1910" y="790" width="150" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Event_CRM_WebhookFailed" bpmnElement="Event_CRM_WebhookFailed">
+        <dc:Bounds x="1830" y="927" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1798" y="893" width="100" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_HandleFail" bpmnElement="Task_CRM_HandleFail">
+        <dc:Bounds x="1910" y="905" width="150" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_CRM_CheckRetry" bpmnElement="Gateway_CRM_CheckRetry" isMarkerVisible="true">
+        <dc:Bounds x="2085" y="920" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2062" y="886" width="96" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Event_CRM_CatchRetry" bpmnElement="Event_CRM_CatchRetry">
+        <dc:Bounds x="2165" y="927" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2138" y="968" width="90" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_CreateRetrySession" bpmnElement="Task_CRM_CreateRetrySession">
+        <dc:Bounds x="2235" y="905" width="150" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Event_CRM_TimerTtl" bpmnElement="Event_CRM_TimerTtl">
+        <dc:Bounds x="1830" y="1032" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1798" y="1073" width="100" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_CRM_MergeExpire" bpmnElement="Gateway_CRM_MergeExpire" isMarkerVisible="true">
+        <dc:Bounds x="2085" y="1025" width="50" height="50" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_ExpireSession" bpmnElement="Task_CRM_ExpireSession">
+        <dc:Bounds x="2390" y="1010" width="155" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EndEvent_CRM_Expired" bpmnElement="EndEvent_CRM_Expired">
+        <dc:Bounds x="2592" y="1032" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2565" y="1075" width="90" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_CRM_MergeToConfirm" bpmnElement="Gateway_CRM_MergeToConfirm" isMarkerVisible="true">
+        <dc:Bounds x="2420" y="805" width="50" height="50" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_CRM_ParFork" bpmnElement="Gateway_CRM_ParFork">
+        <dc:Bounds x="2505" y="805" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2518" y="860" width="24" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_UpdatePaid" bpmnElement="Task_CRM_UpdatePaid">
+        <dc:Bounds x="2600" y="790" width="155" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_PushConfirmed" bpmnElement="Task_CRM_PushConfirmed">
+        <dc:Bounds x="2600" y="610" width="155" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Gateway_CRM_ParJoin" bpmnElement="Gateway_CRM_ParJoin">
+        <dc:Bounds x="2795" y="805" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2810" y="860" width="21" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_AckWebhook" bpmnElement="Task_CRM_AckWebhook">
+        <dc:Bounds x="2875" y="790" width="135" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EndEvent_CRM_Success" bpmnElement="EndEvent_CRM_Success">
+        <dc:Bounds x="3045" y="812" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3018" y="855" width="90" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- ==================== SEQUENCE FLOW EDGES IN POOL 1: USER ==================== -->
+      <bpmndi:BPMNEdge id="Edge_Flow_U1" bpmnElement="Flow_U1">
+        <di:waypoint x="228" y="250" />
+        <di:waypoint x="280" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U2" bpmnElement="Flow_U2">
+        <di:waypoint x="430" y="250" />
+        <di:waypoint x="485" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_ToReject" bpmnElement="Flow_U_ToReject">
+        <di:waypoint x="510" y="225" />
+        <di:waypoint x="510" y="120" />
+        <di:waypoint x="952" y="120" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_Reject1" bpmnElement="Flow_U_Reject1">
+        <di:waypoint x="988" y="120" />
+        <di:waypoint x="1040" y="120" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_Reject2" bpmnElement="Flow_U_Reject2">
+        <di:waypoint x="1180" y="120" />
+        <di:waypoint x="1222" y="120" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_ToCheckout" bpmnElement="Flow_U_ToCheckout">
+        <di:waypoint x="535" y="250" />
+        <di:waypoint x="1407" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_ToFreeConfirm" bpmnElement="Flow_U_ToFreeConfirm">
+        <di:waypoint x="510" y="225" />
+        <di:waypoint x="510" y="180" />
+        <di:waypoint x="2677" y="180" />
+        <di:waypoint x="2677" y="232" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1310" y="160" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_Checkout1" bpmnElement="Flow_U_Checkout1">
+        <di:waypoint x="1443" y="250" />
+        <di:waypoint x="1500" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_ToSubmitCard" bpmnElement="Flow_U_ToSubmitCard">
+        <di:waypoint x="1550" y="250" />
+        <di:waypoint x="1585" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_AfterSubmitCard" bpmnElement="Flow_U_AfterSubmitCard">
+        <di:waypoint x="1735" y="250" />
+        <di:waypoint x="1775" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_ToPaySuccess" bpmnElement="Flow_U_ToPaySuccess">
+        <di:waypoint x="1825" y="250" />
+        <di:waypoint x="2659" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_ToPayError" bpmnElement="Flow_U_ToPayError">
+        <di:waypoint x="1800" y="275" />
+        <di:waypoint x="1800" y="370" />
+        <di:waypoint x="1930" y="370" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_PayError1" bpmnElement="Flow_U_PayError1">
+        <di:waypoint x="1966" y="370" />
+        <di:waypoint x="2015" y="370" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_RetryYes" bpmnElement="Flow_U_RetryYes">
+        <di:waypoint x="2065" y="370" />
+        <di:waypoint x="2105" y="370" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2074" y="352" width="19" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_Retry1" bpmnElement="Flow_U_Retry1">
+        <di:waypoint x="2245" y="370" />
+        <di:waypoint x="2285" y="370" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_RetryLoopBack" bpmnElement="Flow_U_RetryLoopBack">
+        <di:waypoint x="2303" y="388" />
+        <di:waypoint x="2303" y="465" />
+        <di:waypoint x="1525" y="465" />
+        <di:waypoint x="1525" y="275" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_RetryNo" bpmnElement="Flow_U_RetryNo">
+        <di:waypoint x="2040" y="395" />
+        <di:waypoint x="2040" y="420" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2048" y="398" width="12" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_ToExpired" bpmnElement="Flow_U_ToExpired">
+        <di:waypoint x="1800" y="275" />
+        <di:waypoint x="1800" y="295" />
+        <di:waypoint x="2465" y="295" />
+        <di:waypoint x="2465" y="352" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_Expired1" bpmnElement="Flow_U_Expired1">
+        <di:waypoint x="2483" y="370" />
+        <di:waypoint x="2532" y="370" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_Confirmed1" bpmnElement="Flow_U_Confirmed1">
+        <di:waypoint x="2695" y="250" />
+        <di:waypoint x="2745" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_U_Confirmed2" bpmnElement="Flow_U_Confirmed2">
+        <di:waypoint x="2895" y="250" />
+        <di:waypoint x="2942" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <!-- ==================== SEQUENCE FLOW EDGES IN POOL 2: CRM ==================== -->
+      <bpmndi:BPMNEdge id="Edge_Flow_C1" bpmnElement="Flow_C1">
+        <di:waypoint x="373" y="830" />
+        <di:waypoint x="420" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C2" bpmnElement="Flow_C2">
+        <di:waypoint x="565" y="830" />
+        <di:waypoint x="605" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C3" bpmnElement="Flow_C3">
+        <di:waypoint x="760" y="830" />
+        <di:waypoint x="800" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToReject" bpmnElement="Flow_C_ToReject">
+        <di:waypoint x="825" y="805" />
+        <di:waypoint x="825" y="615" />
+        <di:waypoint x="900" y="615" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="745" y="625" width="75" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_RejectEnd" bpmnElement="Flow_C_RejectEnd">
+        <di:waypoint x="1045" y="615" />
+        <di:waypoint x="1092" y="615" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToPendingResume" bpmnElement="Flow_C_ToPendingResume">
+        <di:waypoint x="825" y="805" />
+        <di:waypoint x="825" y="710" />
+        <di:waypoint x="905" y="710" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="830" y="720" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_TtlExpiredYes" bpmnElement="Flow_C_TtlExpiredYes">
+        <di:waypoint x="955" y="710" />
+        <di:waypoint x="995" y="710" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="965" y="692" width="19" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_AfterUpdateTtl" bpmnElement="Flow_C_AfterUpdateTtl">
+        <di:waypoint x="1135" y="710" />
+        <di:waypoint x="1165" y="710" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_TtlExpiredNo" bpmnElement="Flow_C_TtlExpiredNo">
+        <di:waypoint x="930" y="735" />
+        <di:waypoint x="930" y="768" />
+        <di:waypoint x="1190" y="768" />
+        <di:waypoint x="1190" y="735" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="940" y="748" width="12" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_PendingMerged" bpmnElement="Flow_C_PendingMerged">
+        <di:waypoint x="1190" y="735" />
+        <di:waypoint x="1190" y="805" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToNewInsert" bpmnElement="Flow_C_ToNewInsert">
+        <di:waypoint x="850" y="830" />
+        <di:waypoint x="960" y="830" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="868" y="812" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_AfterInsert" bpmnElement="Flow_C_AfterInsert">
+        <di:waypoint x="1115" y="830" />
+        <di:waypoint x="1165" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToCheckFee" bpmnElement="Flow_C_ToCheckFee">
+        <di:waypoint x="1215" y="830" />
+        <di:waypoint x="1255" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_FeePositive" bpmnElement="Flow_C_FeePositive">
+        <di:waypoint x="1305" y="830" />
+        <di:waypoint x="1350" y="830" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1285" y="782" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_FeeZero" bpmnElement="Flow_C_FeeZero">
+        <di:waypoint x="1280" y="805" />
+        <di:waypoint x="1280" y="740" />
+        <di:waypoint x="2445" y="740" />
+        <di:waypoint x="2445" y="805" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1815" y="720" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_AfterInitCheckout" bpmnElement="Flow_C_AfterInitCheckout">
+        <di:waypoint x="1500" y="830" />
+        <di:waypoint x="1545" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToWaitEvents" bpmnElement="Flow_C_ToWaitEvents">
+        <di:waypoint x="1595" y="830" />
+        <di:waypoint x="1710" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToWebhookSuccess" bpmnElement="Flow_C_ToWebhookSuccess">
+        <di:waypoint x="1760" y="830" />
+        <di:waypoint x="1830" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_AfterWebhookSuccess" bpmnElement="Flow_C_AfterWebhookSuccess">
+        <di:waypoint x="1866" y="830" />
+        <di:waypoint x="1910" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_VerifiedSuccess" bpmnElement="Flow_C_VerifiedSuccess">
+        <di:waypoint x="2060" y="830" />
+        <di:waypoint x="2420" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToWebhookFailed" bpmnElement="Flow_C_ToWebhookFailed">
+        <di:waypoint x="1735" y="855" />
+        <di:waypoint x="1735" y="945" />
+        <di:waypoint x="1830" y="945" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_AfterWebhookFailed" bpmnElement="Flow_C_AfterWebhookFailed">
+        <di:waypoint x="1866" y="945" />
+        <di:waypoint x="1910" y="945" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToCheckRetry" bpmnElement="Flow_C_ToCheckRetry">
+        <di:waypoint x="2060" y="945" />
+        <di:waypoint x="2085" y="945" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_AllowRetryYes" bpmnElement="Flow_C_AllowRetryYes">
+        <di:waypoint x="2135" y="945" />
+        <di:waypoint x="2165" y="945" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2140" y="927" width="19" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_AfterCatchRetry" bpmnElement="Flow_C_AfterCatchRetry">
+        <di:waypoint x="2201" y="945" />
+        <di:waypoint x="2235" y="945" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_RetryLoopBack" bpmnElement="Flow_C_RetryLoopBack">
+        <di:waypoint x="2385" y="945" />
+        <di:waypoint x="2405" y="945" />
+        <di:waypoint x="2405" y="885" />
+        <di:waypoint x="1570" y="885" />
+        <di:waypoint x="1570" y="855" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_AllowRetryNo" bpmnElement="Flow_C_AllowRetryNo">
+        <di:waypoint x="2110" y="970" />
+        <di:waypoint x="2110" y="1025" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2118" y="988" width="12" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToTimerTtl" bpmnElement="Flow_C_ToTimerTtl">
+        <di:waypoint x="1735" y="855" />
+        <di:waypoint x="1735" y="1050" />
+        <di:waypoint x="1830" y="1050" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_TimerTriggered" bpmnElement="Flow_C_TimerTriggered">
+        <di:waypoint x="1866" y="1050" />
+        <di:waypoint x="2085" y="1050" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToExpireTask" bpmnElement="Flow_C_ToExpireTask">
+        <di:waypoint x="2135" y="1050" />
+        <di:waypoint x="2390" y="1050" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToExpireEnd" bpmnElement="Flow_C_ToExpireEnd">
+        <di:waypoint x="2545" y="1050" />
+        <di:waypoint x="2592" y="1050" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToParFork" bpmnElement="Flow_C_ToParFork">
+        <di:waypoint x="2470" y="830" />
+        <di:waypoint x="2505" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ParBranch1" bpmnElement="Flow_C_ParBranch1">
+        <di:waypoint x="2555" y="830" />
+        <di:waypoint x="2600" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ParBranch2" bpmnElement="Flow_C_ParBranch2">
+        <di:waypoint x="2530" y="805" />
+        <di:waypoint x="2530" y="650" />
+        <di:waypoint x="2600" y="650" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ParJoin1" bpmnElement="Flow_C_ParJoin1">
+        <di:waypoint x="2755" y="830" />
+        <di:waypoint x="2795" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ParJoin2" bpmnElement="Flow_C_ParJoin2">
+        <di:waypoint x="2755" y="650" />
+        <di:waypoint x="2820" y="650" />
+        <di:waypoint x="2820" y="805" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_AfterParJoin" bpmnElement="Flow_C_AfterParJoin">
+        <di:waypoint x="2845" y="830" />
+        <di:waypoint x="2875" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_ToSuccessEnd" bpmnElement="Flow_C_ToSuccessEnd">
+        <di:waypoint x="3010" y="830" />
+        <di:waypoint x="3045" y="830" />
+      </bpmndi:BPMNEdge>
+
+      <!-- ==================== MESSAGE FLOW EDGES ==================== -->
+      <bpmndi:BPMNEdge id="Edge_MF_RegisterReq" bpmnElement="MF_RegisterReq">
+        <di:waypoint x="355" y="290" />
+        <di:waypoint x="355" y="812" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="240" y="500" width="108" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_RejectResp" bpmnElement="MF_RejectResp">
+        <di:waypoint x="970" y="575" />
+        <di:waypoint x="970" y="138" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="862" y="500" width="100" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_CreateSession" bpmnElement="MF_CreateSession">
+        <di:waypoint x="1395" y="870" />
+        <di:waypoint x="1395" y="1210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1280" y="1155" width="108" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_SessionCreated" bpmnElement="MF_SessionCreated">
+        <di:waypoint x="1455" y="1210" />
+        <di:waypoint x="1455" y="870" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1462" y="1155" width="110" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_CheckoutUrl" bpmnElement="MF_CheckoutUrl">
+        <di:waypoint x="1425" y="790" />
+        <di:waypoint x="1425" y="268" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1432" y="500" width="90" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_SubmitCard" bpmnElement="MF_SubmitCard">
+        <di:waypoint x="1660" y="290" />
+        <di:waypoint x="1660" y="1210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1545" y="500" width="108" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_WebhookSuccess" bpmnElement="MF_WebhookSuccess">
+        <di:waypoint x="1810" y="1210" />
+        <di:waypoint x="1810" y="875" />
+        <di:waypoint x="1848" y="875" />
+        <di:waypoint x="1848" y="848" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1700" y="1155" width="105" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_WebhookFailed" bpmnElement="MF_WebhookFailed">
+        <di:waypoint x="1848" y="1210" />
+        <di:waypoint x="1848" y="963" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1855" y="1155" width="85" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_WebhookFailAck" bpmnElement="MF_WebhookFailAck">
+        <di:waypoint x="1985" y="985" />
+        <di:waypoint x="1985" y="1210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1992" y="1160" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_RedirectFail" bpmnElement="MF_RedirectFail">
+        <di:waypoint x="1780" y="1210" />
+        <di:waypoint x="1780" y="420" />
+        <di:waypoint x="1948" y="420" />
+        <di:waypoint x="1948" y="388" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1670" y="505" width="105" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_RetryReq" bpmnElement="MF_RetryReq">
+        <di:waypoint x="2183" y="410" />
+        <di:waypoint x="2183" y="927" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2075" y="500" width="100" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_RetrySessionReq" bpmnElement="MF_RetrySessionReq">
+        <di:waypoint x="2280" y="985" />
+        <di:waypoint x="2280" y="1210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2165" y="1155" width="108" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_RetrySessionResp" bpmnElement="MF_RetrySessionResp">
+        <di:waypoint x="2340" y="1210" />
+        <di:waypoint x="2340" y="985" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2348" y="1155" width="110" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_RetryCheckoutUrl" bpmnElement="MF_RetryCheckoutUrl">
+        <di:waypoint x="2303" y="905" />
+        <di:waypoint x="2303" y="388" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2310" y="500" width="110" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_PushExpired" bpmnElement="MF_PushExpired">
+        <di:waypoint x="2465" y="1010" />
+        <di:waypoint x="2465" y="388" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2472" y="500" width="120" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_PushConfirmed" bpmnElement="MF_PushConfirmed">
+        <di:waypoint x="2677" y="610" />
+        <di:waypoint x="2677" y="268" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2685" y="500" width="155" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_WebhookSuccessAck" bpmnElement="MF_WebhookSuccessAck">
+        <di:waypoint x="2942" y="870" />
+        <di:waypoint x="2942" y="1210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2950" y="1155" width="105" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
