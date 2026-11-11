@@ -84,3 +84,27 @@
    - **Гілку 1 (`Service Task`):** `Оновити статус у БД на PAID (UPDATE tournament_registration)` (із `DataOutputAssociation` до `Data Object` `tournament_registration [PAID]`);
    - **Гілку 2 (`Send Task`):** `Надіслати pushEvent(REGISTRATION_CONFIRMED)` $\rightarrow$ `Користувач`.
 4. **`Parallel Gateway (AND — Join)`** синхронізує завершення обох паралельних гілок перед фінальною подією `Реєстрацію успішно підтверджено`.
+
+---
+
+## Prompt (Питання щодо логіки Retry Payment та очікування `POST /retry-payment`)
+
+```
+ще таке питання стосовно процесу retry payment: коли сервіс отримує failed від вебхука, то він чомусь одразу перевіряє attempts < 3 та ttl, навіщо? користувач вже отримав сповіщення від самого шлюзу про помилку при оплаті. а вже коли користувач натиская спробувати знову, сервіс не перевіряє attempts та ttl. і також, чи все нормально з 'отримано POST /retry-payment'? чи не потрібно на нього очікувати?
+```
+
+## Response
+
+### 1. Момент перевірки `attempts < 3 та TTL дійсний?`
+- Перевірка `attempts < 3 та TTL дійсний?` одразу після `Webhook charge.failed` є передчасною: під час обробки вебхука `charge.failed` сервіс `Billiard CRM` лише верифікує HMAC-підпис, зберігає статус заявки `PENDING` і повертає шлюзу `200 OK (Ack)`, тоді як користувач отримує повідомлення про помилку безпосередньо від платіжного шлюзу (`redirect(failure_url)`).
+- Валідація `attempts < 3 та TTL дійсний?` має виконуватися **після надходження запиту `POST /retry-payment`** від користувача, оскільки між моментом помилки оплати та натисканням кнопки «Спробувати знову» минає час, за який 15-хвилинний TTL броні або дедлайн реєстрації міг спливти.
+
+### 2. Очікування на `POST /retry-payment` через `Event-Based Gateway` (усунення Deadlock)
+- Розміщення події `Отримано POST /retry-payment` (`Intermediate Message Catch Event`) у послідовному потоці без `Event-Based Gateway` призводить до зависання процесу (Deadlock) у пулі `Billiard CRM`, якщо користувач на своєму боці відмовляється від повторної спроби (`Повторити? -> Ні -> Оплату скасовано`) або закриває сторінку і не надсилає `POST /retry-payment`.
+- **Виправлений потік у гілці `Webhook charge.failed`:**
+  1. Після `Service Task: Перевірити підпис, зберегти PENDING та відповісти 200 OK` встановлюється **`Event-Based Gateway` (`Очікування Retry або TTL`)**, у якому конкурують дві події:
+     - **`Intermediate Message Catch Event: Отримано POST /retry-payment`** (якщо користувач ініціював повторну спробу);
+     - **`Intermediate Timer Catch Event: Тайм-аут Retry min(15 хв, deadline)`** (якщо користувач відмовився від повторної спроби або сплив час броні $\rightarrow$ перехід до `Залишити PENDING, надіслати SESSION_EXPIRED`).
+  2. Одразу після події **`Отримано POST /retry-payment`** виконується перевірка на шлюзі **`XOR: attempts < 3 та TTL дійсний?`**:
+     - **`Так`:** `Service Task: Створити нову Checkout-сесію (createRetrySession)` $\rightarrow$ `Send Task: Надіслати новий checkout_url користувачу` $\rightarrow$ повернення до очікування оплати;
+     - **`Ні`:** перехід до завершення сесії (`Залишити PENDING, надіслати SESSION_EXPIRED`).
