@@ -62,3 +62,25 @@
    - Подається вхідною асоціацією (`DataInputAssociation`) до задачі `Ініціювати сесію оплати (initiateCheckout)`.
 2. **`tournament_registration [PAID]`** (`payment_status = 'PAID'`):
    - Формується вихідною асоціацією (`DataOutputAssociation`) від задачі `Оновити статус у БД на PAID (UPDATE tournament_registration)`.
+
+---
+
+## Prompt (Уточнення щодо підтвердження вебхука перед злиттям та форком)
+
+```
+а чому тут ти взагалі прибрав оновлення статусу у бд з форку? і у раз безкоштовної реєстрації, чому вебхук підтверджується після злиття?
+```
+
+## Response
+
+Винесення `UPDATE tournament_registration` з `Parallel Gateway (Fork)` та розміщення `Підтвердити вебхук (200 OK)` після `XOR`-злиття з гілкою `entry_fee == 0` було помилковим:
+1. У разі безкоштовного турніру (`entry_fee == 0`) взаємодія з `Payment Gateway` відсутня, тому розміщення `Підтвердити вебхук (200 OK)` після злиття призводило до хибної відправки `200 OK (Webhook Ack)` у платіжний шлюз без вхідного вебхука.
+2. Початкова структура паралельного розгалуження передбачала виконання у форку саме двох дій: оновлення статусу в БД (`UPDATE tournament_registration`) та надсилання пуш-сповіщення клієнту (`pushEvent(REGISTRATION_CONFIRMED)`).
+
+**Виправлений порядок дій у Етапі 4:**
+1. У гілці `Webhook charge.successful` одразу після `Service Task: Перевірити HMAC-підпис вебхука (verifyHmacSignature)` виконується **`Send Task: Підтвердити вебхук (200 OK)`** $\rightarrow$ `Message Flow: 200 OK (Webhook Ack)` до `Payment Gateway` (ще до злиття з гілкою `entry_fee == 0` та до входу у `Parallel Gateway`).
+2. Далі виконується **`XOR`-злиття** гілки підтвердженого вебхука із гілкою безкоштовної реєстрації (`entry_fee == 0`).
+3. Після злиття **`Parallel Gateway (AND — Fork)`** паралельно запускає:
+   - **Гілку 1 (`Service Task`):** `Оновити статус у БД на PAID (UPDATE tournament_registration)` (із `DataOutputAssociation` до `Data Object` `tournament_registration [PAID]`);
+   - **Гілку 2 (`Send Task`):** `Надіслати pushEvent(REGISTRATION_CONFIRMED)` $\rightarrow$ `Користувач`.
+4. **`Parallel Gateway (AND — Join)`** синхронізує завершення обох паралельних гілок перед фінальною подією `Реєстрацію успішно підтверджено`.
