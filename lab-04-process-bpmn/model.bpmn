@@ -296,6 +296,11 @@
       <bpmn:outgoing>Flow_C_VerifiedSuccess</bpmn:outgoing>
     </bpmn:serviceTask>
 
+    <bpmn:sendTask id="Task_CRM_AckWebhook" name="Підтвердити вебхук (200 OK)">
+      <bpmn:incoming>Flow_C_VerifiedSuccess</bpmn:incoming>
+      <bpmn:outgoing>Flow_C_AfterAckWebhook</bpmn:outgoing>
+    </bpmn:sendTask>
+
     <!-- Подія 2: Webhook charge.failed -->
     <bpmn:intermediateCatchEvent id="Event_CRM_WebhookFailed" name="Webhook charge.failed">
       <bpmn:incoming>Flow_C_ToWebhookFailed</bpmn:incoming>
@@ -352,20 +357,12 @@
       <bpmn:incoming>Flow_C_ToExpireEnd</bpmn:incoming>
     </bpmn:endEvent>
 
-    <!-- Етап 4: Фіксація PAID у БД та паралельне підтвердження вебхука і сповіщення клієнта -->
+    <!-- Етап 4: Паралельне підтвердження реєстрації в БД та сповіщення клієнта -->
     <bpmn:exclusiveGateway id="Gateway_CRM_MergeToConfirm">
-      <bpmn:incoming>Flow_C_VerifiedSuccess</bpmn:incoming>
+      <bpmn:incoming>Flow_C_AfterAckWebhook</bpmn:incoming>
       <bpmn:incoming>Flow_C_FeeZero</bpmn:incoming>
-      <bpmn:outgoing>Flow_C_ToUpdatePaid</bpmn:outgoing>
-    </bpmn:exclusiveGateway>
-
-    <bpmn:serviceTask id="Task_CRM_UpdatePaid" name="Оновити статус у БД на PAID (UPDATE tournament_registration)">
-      <bpmn:incoming>Flow_C_ToUpdatePaid</bpmn:incoming>
       <bpmn:outgoing>Flow_C_ToParFork</bpmn:outgoing>
-      <bpmn:dataOutputAssociation id="DOA_UpdatePaid">
-        <bpmn:targetRef>DataObjectRef_RegPaid</bpmn:targetRef>
-      </bpmn:dataOutputAssociation>
-    </bpmn:serviceTask>
+    </bpmn:exclusiveGateway>
 
     <bpmn:parallelGateway id="Gateway_CRM_ParFork" name="Fork">
       <bpmn:incoming>Flow_C_ToParFork</bpmn:incoming>
@@ -373,10 +370,13 @@
       <bpmn:outgoing>Flow_C_ParBranch2</bpmn:outgoing>
     </bpmn:parallelGateway>
 
-    <bpmn:sendTask id="Task_CRM_AckWebhook" name="Підтвердити вебхук (200 OK)">
+    <bpmn:serviceTask id="Task_CRM_UpdatePaid" name="Оновити статус у БД на PAID (UPDATE tournament_registration)">
       <bpmn:incoming>Flow_C_ParBranch1</bpmn:incoming>
       <bpmn:outgoing>Flow_C_ParJoin1</bpmn:outgoing>
-    </bpmn:sendTask>
+      <bpmn:dataOutputAssociation id="DOA_UpdatePaid">
+        <bpmn:targetRef>DataObjectRef_RegPaid</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:serviceTask>
 
     <bpmn:sendTask id="Task_CRM_PushConfirmed" name="Надіслати pushEvent(REGISTRATION_CONFIRMED)">
       <bpmn:incoming>Flow_C_ParBranch2</bpmn:incoming>
@@ -414,7 +414,8 @@
     <bpmn:sequenceFlow id="Flow_C_ToWaitEvents" sourceRef="Gateway_CRM_EventLoopMerge" targetRef="Gateway_CRM_WaitEvents" />
     <bpmn:sequenceFlow id="Flow_C_ToWebhookSuccess" sourceRef="Gateway_CRM_WaitEvents" targetRef="Event_CRM_WebhookSuccess" />
     <bpmn:sequenceFlow id="Flow_C_AfterWebhookSuccess" sourceRef="Event_CRM_WebhookSuccess" targetRef="Task_CRM_VerifySuccessSig" />
-    <bpmn:sequenceFlow id="Flow_C_VerifiedSuccess" sourceRef="Task_CRM_VerifySuccessSig" targetRef="Gateway_CRM_MergeToConfirm" />
+    <bpmn:sequenceFlow id="Flow_C_VerifiedSuccess" sourceRef="Task_CRM_VerifySuccessSig" targetRef="Task_CRM_AckWebhook" />
+    <bpmn:sequenceFlow id="Flow_C_AfterAckWebhook" sourceRef="Task_CRM_AckWebhook" targetRef="Gateway_CRM_MergeToConfirm" />
     <bpmn:sequenceFlow id="Flow_C_ToWebhookFailed" sourceRef="Gateway_CRM_WaitEvents" targetRef="Event_CRM_WebhookFailed" />
     <bpmn:sequenceFlow id="Flow_C_AfterWebhookFailed" sourceRef="Event_CRM_WebhookFailed" targetRef="Task_CRM_HandleFail" />
     <bpmn:sequenceFlow id="Flow_C_ToCheckRetry" sourceRef="Task_CRM_HandleFail" targetRef="Gateway_CRM_CheckRetry" />
@@ -427,11 +428,10 @@
     <bpmn:sequenceFlow id="Flow_C_TimerTriggered" sourceRef="Event_CRM_TimerTtl" targetRef="Gateway_CRM_MergeExpire" />
     <bpmn:sequenceFlow id="Flow_C_ToExpireTask" sourceRef="Gateway_CRM_MergeExpire" targetRef="Task_CRM_ExpireSession" />
     <bpmn:sequenceFlow id="Flow_C_ToExpireEnd" sourceRef="Task_CRM_ExpireSession" targetRef="EndEvent_CRM_Expired" />
-    <bpmn:sequenceFlow id="Flow_C_ToUpdatePaid" sourceRef="Gateway_CRM_MergeToConfirm" targetRef="Task_CRM_UpdatePaid" />
-    <bpmn:sequenceFlow id="Flow_C_ToParFork" sourceRef="Task_CRM_UpdatePaid" targetRef="Gateway_CRM_ParFork" />
-    <bpmn:sequenceFlow id="Flow_C_ParBranch1" sourceRef="Gateway_CRM_ParFork" targetRef="Task_CRM_AckWebhook" />
+    <bpmn:sequenceFlow id="Flow_C_ToParFork" sourceRef="Gateway_CRM_MergeToConfirm" targetRef="Gateway_CRM_ParFork" />
+    <bpmn:sequenceFlow id="Flow_C_ParBranch1" sourceRef="Gateway_CRM_ParFork" targetRef="Task_CRM_UpdatePaid" />
     <bpmn:sequenceFlow id="Flow_C_ParBranch2" sourceRef="Gateway_CRM_ParFork" targetRef="Task_CRM_PushConfirmed" />
-    <bpmn:sequenceFlow id="Flow_C_ParJoin1" sourceRef="Task_CRM_AckWebhook" targetRef="Gateway_CRM_ParJoin" />
+    <bpmn:sequenceFlow id="Flow_C_ParJoin1" sourceRef="Task_CRM_UpdatePaid" targetRef="Gateway_CRM_ParJoin" />
     <bpmn:sequenceFlow id="Flow_C_ParJoin2" sourceRef="Task_CRM_PushConfirmed" targetRef="Gateway_CRM_ParJoin" />
     <bpmn:sequenceFlow id="Flow_C_ToSuccessEnd" sourceRef="Gateway_CRM_ParJoin" targetRef="EndEvent_CRM_Success" />
   </bpmn:process>
@@ -586,9 +586,9 @@
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_DataObjectRef_RegPaid" bpmnElement="DataObjectRef_RegPaid">
-        <dc:Bounds x="1202" y="2635" width="36" height="50" />
+        <dc:Bounds x="1202" y="2845" width="36" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1172" y="2692" width="96" height="40" />
+          <dc:Bounds x="1172" y="2902" width="96" height="40" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
@@ -730,22 +730,22 @@
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Event_CRM_WebhookSuccess" bpmnElement="Event_CRM_WebhookSuccess">
-        <dc:Bounds x="1042" y="2422" width="36" height="36" />
+        <dc:Bounds x="1042" y="2412" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1084" y="2405" width="94" height="27" />
+          <dc:Bounds x="1084" y="2395" width="94" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_VerifySuccessSig" bpmnElement="Task_CRM_VerifySuccessSig">
-        <dc:Bounds x="975" y="2485" width="170" height="80" />
+        <dc:Bounds x="975" y="2470" width="170" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_AckWebhook" bpmnElement="Task_CRM_AckWebhook">
+        <dc:Bounds x="975" y="2575" width="170" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_MergeToConfirm" bpmnElement="Gateway_CRM_MergeToConfirm" isMarkerVisible="true">
-        <dc:Bounds x="1035" y="2580" width="50" height="50" />
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_Task_CRM_UpdatePaid" bpmnElement="Task_CRM_UpdatePaid">
-        <dc:Bounds x="975" y="2648" width="170" height="84" />
+        <dc:Bounds x="1035" y="2680" width="50" height="50" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_ParFork" bpmnElement="Gateway_CRM_ParFork">
@@ -755,8 +755,8 @@
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
-      <bpmndi:BPMNShape id="Shape_Task_CRM_AckWebhook" bpmnElement="Task_CRM_AckWebhook">
-        <dc:Bounds x="975" y="2830" width="170" height="80" />
+      <bpmndi:BPMNShape id="Shape_Task_CRM_UpdatePaid" bpmnElement="Task_CRM_UpdatePaid">
+        <dc:Bounds x="975" y="2830" width="170" height="84" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_PushConfirmed" bpmnElement="Task_CRM_PushConfirmed">
@@ -795,8 +795,8 @@
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_DOA_UpdatePaid" bpmnElement="DOA_UpdatePaid">
-        <di:waypoint x="1145" y="2660" />
-        <di:waypoint x="1202" y="2660" />
+        <di:waypoint x="1145" y="2870" />
+        <di:waypoint x="1202" y="2870" />
       </bpmndi:BPMNEdge>
 
       <!-- ==================== SEQUENCE FLOW EDGES IN POOL 1: USER ==================== -->
@@ -1021,8 +1021,8 @@
       <bpmndi:BPMNEdge id="Edge_Flow_C_FeeZero" bpmnElement="Flow_C_FeeZero">
         <di:waypoint x="1035" y="1060" />
         <di:waypoint x="945" y="1060" />
-        <di:waypoint x="945" y="2605" />
-        <di:waypoint x="1035" y="2605" />
+        <di:waypoint x="945" y="2705" />
+        <di:waypoint x="1035" y="2705" />
         <bpmndi:BPMNLabel>
           <dc:Bounds x="860" y="1038" width="80" height="14" />
         </bpmndi:BPMNLabel>
@@ -1045,17 +1045,22 @@
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToWebhookSuccess" bpmnElement="Flow_C_ToWebhookSuccess">
         <di:waypoint x="1060" y="1585" />
-        <di:waypoint x="1060" y="2422" />
+        <di:waypoint x="1060" y="2412" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_AfterWebhookSuccess" bpmnElement="Flow_C_AfterWebhookSuccess">
-        <di:waypoint x="1060" y="2458" />
-        <di:waypoint x="1060" y="2485" />
+        <di:waypoint x="1060" y="2448" />
+        <di:waypoint x="1060" y="2470" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_VerifiedSuccess" bpmnElement="Flow_C_VerifiedSuccess">
-        <di:waypoint x="1060" y="2565" />
-        <di:waypoint x="1060" y="2580" />
+        <di:waypoint x="1060" y="2550" />
+        <di:waypoint x="1060" y="2575" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_C_AfterAckWebhook" bpmnElement="Flow_C_AfterAckWebhook">
+        <di:waypoint x="1060" y="2655" />
+        <di:waypoint x="1060" y="2680" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToWebhookFailed" bpmnElement="Flow_C_ToWebhookFailed">
@@ -1131,11 +1136,6 @@
         <di:waypoint x="830" y="2512" />
       </bpmndi:BPMNEdge>
 
-      <bpmndi:BPMNEdge id="Edge_Flow_C_ToUpdatePaid" bpmnElement="Flow_C_ToUpdatePaid">
-        <di:waypoint x="1060" y="2630" />
-        <di:waypoint x="1060" y="2650" />
-      </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToParFork" bpmnElement="Flow_C_ToParFork">
         <di:waypoint x="1060" y="2730" />
         <di:waypoint x="1060" y="2755" />
@@ -1153,12 +1153,12 @@
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ParJoin1" bpmnElement="Flow_C_ParJoin1">
-        <di:waypoint x="1060" y="2910" />
+        <di:waypoint x="1060" y="2914" />
         <di:waypoint x="1060" y="2945" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ParJoin2" bpmnElement="Flow_C_ParJoin2">
-        <di:waypoint x="832" y="2910" />
+        <di:waypoint x="832" y="2914" />
         <di:waypoint x="832" y="2970" />
         <di:waypoint x="1035" y="2970" />
       </bpmndi:BPMNEdge>
@@ -1282,10 +1282,10 @@
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_WebhookSuccess" bpmnElement="MF_WebhookSuccess">
-        <di:waypoint x="1630" y="2440" />
-        <di:waypoint x="1078" y="2440" />
+        <di:waypoint x="1630" y="2430" />
+        <di:waypoint x="1078" y="2430" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1510" y="2406" width="110" height="27" />
+          <dc:Bounds x="1510" y="2396" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
@@ -1298,10 +1298,10 @@
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_WebhookSuccessAck" bpmnElement="MF_WebhookSuccessAck">
-        <di:waypoint x="1145" y="2870" />
-        <di:waypoint x="1630" y="2870" />
+        <di:waypoint x="1145" y="2615" />
+        <di:waypoint x="1630" y="2615" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1510" y="2835" width="110" height="27" />
+          <dc:Bounds x="1510" y="2580" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
