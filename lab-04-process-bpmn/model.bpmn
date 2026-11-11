@@ -273,14 +273,16 @@
     <!-- Етап 3: Оплата, повторні спроби (Retry) та очікування подій -->
     <bpmn:exclusiveGateway id="Gateway_CRM_EventLoopMerge">
       <bpmn:incoming>Flow_C_AfterInitCheckout</bpmn:incoming>
+      <bpmn:incoming>Flow_C_AfterHandleFail</bpmn:incoming>
       <bpmn:incoming>Flow_C_RetryLoopBack</bpmn:incoming>
       <bpmn:outgoing>Flow_C_ToWaitEvents</bpmn:outgoing>
     </bpmn:exclusiveGateway>
 
-    <bpmn:eventBasedGateway id="Gateway_CRM_WaitEvents" name="Очікування Webhook або TTL">
+    <bpmn:eventBasedGateway id="Gateway_CRM_WaitEvents" name="Очікування події оплати або TTL">
       <bpmn:incoming>Flow_C_ToWaitEvents</bpmn:incoming>
       <bpmn:outgoing>Flow_C_ToWebhookSuccess</bpmn:outgoing>
       <bpmn:outgoing>Flow_C_ToWebhookFailed</bpmn:outgoing>
+      <bpmn:outgoing>Flow_C_ToCatchRetry</bpmn:outgoing>
       <bpmn:outgoing>Flow_C_ToTimerTtl</bpmn:outgoing>
     </bpmn:eventBasedGateway>
 
@@ -310,21 +312,10 @@
 
     <bpmn:serviceTask id="Task_CRM_HandleFail" name="Перевірити підпис, зберегти PENDING та відповісти 200 OK">
       <bpmn:incoming>Flow_C_AfterWebhookFailed</bpmn:incoming>
-      <bpmn:outgoing>Flow_C_ToWaitRetry</bpmn:outgoing>
+      <bpmn:outgoing>Flow_C_AfterHandleFail</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <bpmn:eventBasedGateway id="Gateway_CRM_WaitRetry" name="Очікування Retry або TTL">
-      <bpmn:incoming>Flow_C_ToWaitRetry</bpmn:incoming>
-      <bpmn:outgoing>Flow_C_ToCatchRetry</bpmn:outgoing>
-      <bpmn:outgoing>Flow_C_ToRetryTimerTtl</bpmn:outgoing>
-    </bpmn:eventBasedGateway>
-
-    <bpmn:intermediateCatchEvent id="Event_CRM_RetryTimerTtl" name="Тайм-аут Retry min(15 хв, deadline)">
-      <bpmn:incoming>Flow_C_ToRetryTimerTtl</bpmn:incoming>
-      <bpmn:outgoing>Flow_C_RetryTimerTriggered</bpmn:outgoing>
-      <bpmn:timerEventDefinition id="TED_CRM_RetryTimerTtl" />
-    </bpmn:intermediateCatchEvent>
-
+    <!-- Подія 3: POST /retry-payment -->
     <bpmn:intermediateCatchEvent id="Event_CRM_CatchRetry" name="Отримано POST /retry-payment">
       <bpmn:incoming>Flow_C_ToCatchRetry</bpmn:incoming>
       <bpmn:outgoing>Flow_C_AfterCatchRetry</bpmn:outgoing>
@@ -347,8 +338,8 @@
       <bpmn:outgoing>Flow_C_RetryLoopBack</bpmn:outgoing>
     </bpmn:sendTask>
 
-    <!-- Подія 3: Тайм-аут броні min(15 хв, deadline) -->
-    <bpmn:intermediateCatchEvent id="Event_CRM_TimerTtl" name="Тайм-аут min(15 хв, deadline)">
+    <!-- Подія 4: Тайм-аут броні min(registered_at + 15 хв, deadline) -->
+    <bpmn:intermediateCatchEvent id="Event_CRM_TimerTtl" name="Тайм-аут min(registered_at + 15 хв, deadline)">
       <bpmn:incoming>Flow_C_ToTimerTtl</bpmn:incoming>
       <bpmn:outgoing>Flow_C_TimerTriggered</bpmn:outgoing>
       <bpmn:timerEventDefinition id="TED_CRM_TimerTtl" />
@@ -356,7 +347,6 @@
 
     <bpmn:exclusiveGateway id="Gateway_CRM_MergeExpire">
       <bpmn:incoming>Flow_C_TimerTriggered</bpmn:incoming>
-      <bpmn:incoming>Flow_C_RetryTimerTriggered</bpmn:incoming>
       <bpmn:incoming>Flow_C_AllowRetryNo</bpmn:incoming>
       <bpmn:outgoing>Flow_C_ToExpireTask</bpmn:outgoing>
     </bpmn:exclusiveGateway>
@@ -431,10 +421,8 @@
     <bpmn:sequenceFlow id="Flow_C_AfterAckWebhook" sourceRef="Task_CRM_AckWebhook" targetRef="Gateway_CRM_MergeToConfirm" />
     <bpmn:sequenceFlow id="Flow_C_ToWebhookFailed" sourceRef="Gateway_CRM_WaitEvents" targetRef="Event_CRM_WebhookFailed" />
     <bpmn:sequenceFlow id="Flow_C_AfterWebhookFailed" sourceRef="Event_CRM_WebhookFailed" targetRef="Task_CRM_HandleFail" />
-    <bpmn:sequenceFlow id="Flow_C_ToWaitRetry" sourceRef="Task_CRM_HandleFail" targetRef="Gateway_CRM_WaitRetry" />
-    <bpmn:sequenceFlow id="Flow_C_ToCatchRetry" sourceRef="Gateway_CRM_WaitRetry" targetRef="Event_CRM_CatchRetry" />
-    <bpmn:sequenceFlow id="Flow_C_ToRetryTimerTtl" sourceRef="Gateway_CRM_WaitRetry" targetRef="Event_CRM_RetryTimerTtl" />
-    <bpmn:sequenceFlow id="Flow_C_RetryTimerTriggered" sourceRef="Event_CRM_RetryTimerTtl" targetRef="Gateway_CRM_MergeExpire" />
+    <bpmn:sequenceFlow id="Flow_C_AfterHandleFail" sourceRef="Task_CRM_HandleFail" targetRef="Gateway_CRM_EventLoopMerge" />
+    <bpmn:sequenceFlow id="Flow_C_ToCatchRetry" sourceRef="Gateway_CRM_WaitEvents" targetRef="Event_CRM_CatchRetry" />
     <bpmn:sequenceFlow id="Flow_C_AfterCatchRetry" sourceRef="Event_CRM_CatchRetry" targetRef="Gateway_CRM_CheckRetry" />
     <bpmn:sequenceFlow id="Flow_C_AllowRetryYes" name="Так" sourceRef="Gateway_CRM_CheckRetry" targetRef="Task_CRM_CreateRetrySession" />
     <bpmn:sequenceFlow id="Flow_C_ToSendRetryUrl" sourceRef="Task_CRM_CreateRetrySession" targetRef="Task_CRM_SendRetryUrl" />
@@ -686,7 +674,7 @@
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_WaitEvents" bpmnElement="Gateway_CRM_WaitEvents">
         <dc:Bounds x="1035" y="1535" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="945" y="1518" width="85" height="27" />
+          <dc:Bounds x="945" y="1512" width="90" height="40" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
@@ -698,21 +686,7 @@
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_HandleFail" bpmnElement="Task_CRM_HandleFail">
-        <dc:Bounds x="1265" y="1795" width="150" height="80" />
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_Gateway_CRM_WaitRetry" bpmnElement="Gateway_CRM_WaitRetry">
-        <dc:Bounds x="1315" y="1910" width="50" height="50" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="1372" y="1922" width="90" height="27" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_Event_CRM_RetryTimerTtl" bpmnElement="Event_CRM_RetryTimerTtl">
-        <dc:Bounds x="1182" y="1992" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="1095" y="1990" width="80" height="40" />
-        </bpmndi:BPMNLabel>
+        <dc:Bounds x="1255" y="1795" width="170" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Event_CRM_CatchRetry" bpmnElement="Event_CRM_CatchRetry">
@@ -740,7 +714,7 @@
       <bpmndi:BPMNShape id="Shape_Event_CRM_TimerTtl" bpmnElement="Event_CRM_TimerTtl">
         <dc:Bounds x="812" y="1722" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="735" y="1716" width="72" height="40" />
+          <dc:Bounds x="732" y="1712" width="76" height="54" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
@@ -1104,26 +1078,20 @@
         <di:waypoint x="1340" y="1795" />
       </bpmndi:BPMNEdge>
 
-      <bpmndi:BPMNEdge id="Edge_Flow_C_ToWaitRetry" bpmnElement="Flow_C_ToWaitRetry">
+      <bpmndi:BPMNEdge id="Edge_Flow_C_AfterHandleFail" bpmnElement="Flow_C_AfterHandleFail">
         <di:waypoint x="1340" y="1875" />
-        <di:waypoint x="1340" y="1910" />
+        <di:waypoint x="1340" y="1915" />
+        <di:waypoint x="1475" y="1915" />
+        <di:waypoint x="1475" y="1410" />
+        <di:waypoint x="1085" y="1410" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToCatchRetry" bpmnElement="Flow_C_ToCatchRetry">
-        <di:waypoint x="1340" y="1960" />
+        <di:waypoint x="1085" y="1560" />
+        <di:waypoint x="1185" y="1560" />
+        <di:waypoint x="1185" y="2030" />
+        <di:waypoint x="1340" y="2030" />
         <di:waypoint x="1340" y="2072" />
-      </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_Flow_C_ToRetryTimerTtl" bpmnElement="Flow_C_ToRetryTimerTtl">
-        <di:waypoint x="1315" y="1935" />
-        <di:waypoint x="1200" y="1935" />
-        <di:waypoint x="1200" y="1992" />
-      </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_Flow_C_RetryTimerTriggered" bpmnElement="Flow_C_RetryTimerTriggered">
-        <di:waypoint x="1200" y="2028" />
-        <di:waypoint x="1200" y="2340" />
-        <di:waypoint x="855" y="2340" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_AfterCatchRetry" bpmnElement="Flow_C_AfterCatchRetry">
@@ -1154,11 +1122,11 @@
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_AllowRetryNo" bpmnElement="Flow_C_AllowRetryNo">
         <di:waypoint x="1315" y="2160" />
-        <di:waypoint x="1200" y="2160" />
-        <di:waypoint x="1200" y="2340" />
+        <di:waypoint x="1185" y="2160" />
+        <di:waypoint x="1185" y="2340" />
         <di:waypoint x="855" y="2340" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1255" y="2142" width="12" height="14" />
+          <dc:Bounds x="1250" y="2142" width="12" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
@@ -1273,7 +1241,7 @@
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_WebhookFailAck" bpmnElement="MF_WebhookFailAck">
-        <di:waypoint x="1415" y="1835" />
+        <di:waypoint x="1425" y="1835" />
         <di:waypoint x="1630" y="1835" />
         <bpmndi:BPMNLabel>
           <dc:Bounds x="1525" y="1813" width="80" height="14" />
