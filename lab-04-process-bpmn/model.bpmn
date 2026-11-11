@@ -20,7 +20,6 @@
     <bpmn:messageFlow id="MF_SessionCreated" name="200 OK {session_id, checkout_url}" sourceRef="Participant_Gateway" targetRef="Task_CRM_InitCheckout" />
     <bpmn:messageFlow id="MF_CheckoutUrl" name="201 / 200 {checkout_url}" sourceRef="Task_CRM_InitCheckout" targetRef="Event_User_CatchCheckout" />
     <bpmn:messageFlow id="MF_SubmitCard" name="submitPayment(cardDetails)" sourceRef="Task_User_SubmitPayment" targetRef="Participant_Gateway" />
-    <bpmn:messageFlow id="MF_WebhookSuccess" name="Webhook charge.successful" sourceRef="Participant_Gateway" targetRef="Event_CRM_WebhookSuccess" />
     <bpmn:messageFlow id="MF_WebhookFailed" name="Webhook charge.failed" sourceRef="Participant_Gateway" targetRef="Event_CRM_WebhookFailed" />
     <bpmn:messageFlow id="MF_WebhookFailAck" name="200 OK (Ack)" sourceRef="Task_CRM_HandleFail" targetRef="Participant_Gateway" />
     <bpmn:messageFlow id="MF_RedirectFail" name="redirect(failure_url)" sourceRef="Participant_Gateway" targetRef="Event_User_CatchPayError" />
@@ -29,6 +28,7 @@
     <bpmn:messageFlow id="MF_RetrySessionResp" name="200 OK {new_checkout_url}" sourceRef="Participant_Gateway" targetRef="Task_CRM_CreateRetrySession" />
     <bpmn:messageFlow id="MF_RetryCheckoutUrl" name="200 OK {new_checkout_url}" sourceRef="Task_CRM_CreateRetrySession" targetRef="Event_User_CatchRetryUrl" />
     <bpmn:messageFlow id="MF_PushExpired" name="pushEvent(SESSION_EXPIRED)" sourceRef="Task_CRM_ExpireSession" targetRef="Event_User_CatchExpired" />
+    <bpmn:messageFlow id="MF_WebhookSuccess" name="Webhook charge.successful" sourceRef="Participant_Gateway" targetRef="Event_CRM_WebhookSuccess" />
     <bpmn:messageFlow id="MF_PushConfirmed" name="pushEvent(REGISTRATION_CONFIRMED)" sourceRef="Task_CRM_PushConfirmed" targetRef="Event_User_CatchConfirmed" />
     <bpmn:messageFlow id="MF_WebhookSuccessAck" name="200 OK (Webhook Ack)" sourceRef="Task_CRM_AckWebhook" targetRef="Participant_Gateway" />
   </bpmn:collaboration>
@@ -405,816 +405,817 @@
     <bpmn:sequenceFlow id="Flow_C_ToSuccessEnd" sourceRef="Task_CRM_AckWebhook" targetRef="EndEvent_CRM_Success" />
   </bpmn:process>
 
-  <!-- ==================== BPMN DI (LAYOUT & COORDINATES) ==================== -->
+  <!-- ==================== BPMN DI (VERTICAL LAYOUT & COORDINATES) ==================== -->
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_TournamentRegistration">
 
-      <!-- POOLS -->
-      <bpmndi:BPMNShape id="Shape_Participant_User" bpmnElement="Participant_User" isHorizontal="true">
-        <dc:Bounds x="120" y="50" width="3020" height="430" />
+      <!-- VERTICAL POOLS (isHorizontal="false") -->
+      <bpmndi:BPMNShape id="Shape_Participant_User" bpmnElement="Participant_User" isHorizontal="false">
+        <dc:Bounds x="60" y="60" width="540" height="2910" />
       </bpmndi:BPMNShape>
 
-      <bpmndi:BPMNShape id="Shape_Participant_CRM" bpmnElement="Participant_CRM" isHorizontal="true">
-        <dc:Bounds x="120" y="550" width="3020" height="580" />
+      <bpmndi:BPMNShape id="Shape_Participant_CRM" bpmnElement="Participant_CRM" isHorizontal="false">
+        <dc:Bounds x="730" y="60" width="770" height="2910" />
       </bpmndi:BPMNShape>
 
-      <bpmndi:BPMNShape id="Shape_Participant_Gateway" bpmnElement="Participant_Gateway" isHorizontal="true">
-        <dc:Bounds x="120" y="1210" width="3020" height="80" />
+      <bpmndi:BPMNShape id="Shape_Participant_Gateway" bpmnElement="Participant_Gateway" isHorizontal="false">
+        <dc:Bounds x="1630" y="60" width="100" height="2910" />
       </bpmndi:BPMNShape>
 
       <!-- ==================== SHAPES IN POOL 1: USER ==================== -->
       <bpmndi:BPMNShape id="Shape_StartEvent_User" bpmnElement="StartEvent_User">
-        <dc:Bounds x="192" y="232" width="36" height="36" />
+        <dc:Bounds x="312" y="132" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="165" y="275" width="90" height="27" />
+          <dc:Bounds x="210" y="136" width="95" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_User_ClickRegister" bpmnElement="Task_User_ClickRegister">
-        <dc:Bounds x="280" y="210" width="150" height="80" />
+        <dc:Bounds x="255" y="220" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_User_InitResp" bpmnElement="Gateway_User_InitResp">
-        <dc:Bounds x="485" y="225" width="50" height="50" />
+        <dc:Bounds x="305" y="355" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="415" y="192" width="80" height="27" />
+          <dc:Bounds x="362" y="366" width="80" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Event_User_CatchReject" bpmnElement="Event_User_CatchReject">
-        <dc:Bounds x="952" y="102" width="36" height="36" />
+        <dc:Bounds x="142" y="712" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="920" y="66" width="100" height="27" />
+          <dc:Bounds x="75" y="675" width="100" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_User_ViewError" bpmnElement="Task_User_ViewError">
-        <dc:Bounds x="1040" y="80" width="140" height="80" />
+        <dc:Bounds x="90" y="810" width="140" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_EndEvent_User_Rejected" bpmnElement="EndEvent_User_Rejected">
-        <dc:Bounds x="1222" y="102" width="36" height="36" />
+        <dc:Bounds x="142" y="942" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1200" y="145" width="80" height="27" />
+          <dc:Bounds x="120" y="985" width="80" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Event_User_CatchCheckout" bpmnElement="Event_User_CatchCheckout">
-        <dc:Bounds x="1407" y="232" width="36" height="36" />
+        <dc:Bounds x="312" y="1162" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1387" y="196" width="76" height="27" />
+          <dc:Bounds x="225" y="1166" width="80" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_User_PayLoopMerge" bpmnElement="Gateway_User_PayLoopMerge" isMarkerVisible="true">
-        <dc:Bounds x="1500" y="225" width="50" height="50" />
+        <dc:Bounds x="305" y="1265" width="50" height="50" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_User_SubmitPayment" bpmnElement="Task_User_SubmitPayment">
-        <dc:Bounds x="1585" y="210" width="150" height="80" />
+        <dc:Bounds x="255" y="1360" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_User_WaitPayResult" bpmnElement="Gateway_User_WaitPayResult">
-        <dc:Bounds x="1775" y="225" width="50" height="50" />
+        <dc:Bounds x="305" y="1495" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1752" y="198" width="96" height="14" />
+          <dc:Bounds x="200" y="1475" width="96" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Event_User_CatchPayError" bpmnElement="Event_User_CatchPayError">
-        <dc:Bounds x="1930" y="352" width="36" height="36" />
+        <dc:Bounds x="467" y="1752" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1898" y="315" width="100" height="27" />
+          <dc:Bounds x="358" y="1756" width="100" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_User_RetryChoice" bpmnElement="Gateway_User_RetryChoice" isMarkerVisible="true">
-        <dc:Bounds x="2015" y="345" width="50" height="50" />
+        <dc:Bounds x="460" y="1835" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1995" y="310" width="90" height="27" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_Task_User_ClickRetry" bpmnElement="Task_User_ClickRetry">
-        <dc:Bounds x="2105" y="330" width="140" height="80" />
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_Event_User_CatchRetryUrl" bpmnElement="Event_User_CatchRetryUrl">
-        <dc:Bounds x="2285" y="352" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="2255" y="315" width="96" height="27" />
+          <dc:Bounds x="368" y="1805" width="88" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_EndEvent_User_GiveUp" bpmnElement="EndEvent_User_GiveUp">
-        <dc:Bounds x="2022" y="420" width="36" height="36" />
+        <dc:Bounds x="372" y="1842" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2066" y="431" width="98" height="14" />
+          <dc:Bounds x="345" y="1885" width="90" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_User_ClickRetry" bpmnElement="Task_User_ClickRetry">
+        <dc:Bounds x="415" y="1930" width="140" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Event_User_CatchRetryUrl" bpmnElement="Event_User_CatchRetryUrl">
+        <dc:Bounds x="467" y="2072" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="362" y="2076" width="96" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Event_User_CatchExpired" bpmnElement="Event_User_CatchExpired">
-        <dc:Bounds x="2447" y="352" width="36" height="36" />
+        <dc:Bounds x="197" y="2212" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2330" y="356" width="110" height="27" />
+          <dc:Bounds x="122" y="2175" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_EndEvent_User_Expired" bpmnElement="EndEvent_User_Expired">
-        <dc:Bounds x="2532" y="352" width="36" height="36" />
+        <dc:Bounds x="197" y="2302" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2515" y="395" width="70" height="27" />
+          <dc:Bounds x="180" y="2345" width="70" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Event_User_CatchConfirmed" bpmnElement="Event_User_CatchConfirmed">
-        <dc:Bounds x="2659" y="232" width="36" height="36" />
+        <dc:Bounds x="312" y="2602" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2500" y="260" width="155" height="27" />
+          <dc:Bounds x="150" y="2606" width="155" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_User_ViewSuccess" bpmnElement="Task_User_ViewSuccess">
-        <dc:Bounds x="2745" y="210" width="150" height="80" />
+        <dc:Bounds x="255" y="2720" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_EndEvent_User_Success" bpmnElement="EndEvent_User_Success">
-        <dc:Bounds x="2942" y="232" width="36" height="36" />
+        <dc:Bounds x="312" y="2842" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2915" y="275" width="90" height="27" />
+          <dc:Bounds x="285" y="2885" width="90" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <!-- ==================== SHAPES IN POOL 2: BILLIARD CRM ==================== -->
       <bpmndi:BPMNShape id="Shape_StartEvent_CRM_RegReq" bpmnElement="StartEvent_CRM_RegReq">
-        <dc:Bounds x="337" y="812" width="36" height="36" />
+        <dc:Bounds x="1042" y="242" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="310" y="855" width="90" height="27" />
+          <dc:Bounds x="1088" y="246" width="90" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_Auth" bpmnElement="Task_CRM_Auth">
-        <dc:Bounds x="420" y="790" width="145" height="80" />
+        <dc:Bounds x="985" y="340" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_CheckDB" bpmnElement="Task_CRM_CheckDB">
-        <dc:Bounds x="605" y="790" width="155" height="80" />
+        <dc:Bounds x="985" y="460" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_Validate" bpmnElement="Gateway_CRM_Validate" isMarkerVisible="true">
-        <dc:Bounds x="800" y="805" width="50" height="50" />
+        <dc:Bounds x="1035" y="595" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="735" y="772" width="70" height="27" />
+          <dc:Bounds x="965" y="575" width="70" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_SendReject" bpmnElement="Task_CRM_SendReject">
-        <dc:Bounds x="900" y="575" width="145" height="80" />
+        <dc:Bounds x="755" y="690" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_EndEvent_CRM_Rejected" bpmnElement="EndEvent_CRM_Rejected">
-        <dc:Bounds x="1092" y="597" width="36" height="36" />
+        <dc:Bounds x="812" y="832" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1065" y="640" width="90" height="14" />
+          <dc:Bounds x="785" y="875" width="90" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_CheckTtlExpired" bpmnElement="Gateway_CRM_CheckTtlExpired" isMarkerVisible="true">
-        <dc:Bounds x="905" y="685" width="50" height="50" />
+        <dc:Bounds x="1315" y="705" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="890" y="663" width="80" height="14" />
+          <dc:Bounds x="1372" y="723" width="80" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_UpdateTtl" bpmnElement="Task_CRM_UpdateTtl">
-        <dc:Bounds x="995" y="670" width="140" height="80" />
+        <dc:Bounds x="1265" y="810" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_MergePending" bpmnElement="Gateway_CRM_MergePending" isMarkerVisible="true">
-        <dc:Bounds x="1165" y="685" width="50" height="50" />
+        <dc:Bounds x="1315" y="935" width="50" height="50" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_InsertPending" bpmnElement="Task_CRM_InsertPending">
-        <dc:Bounds x="960" y="790" width="155" height="80" />
+        <dc:Bounds x="985" y="810" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_MergeBeforeFee" bpmnElement="Gateway_CRM_MergeBeforeFee" isMarkerVisible="true">
-        <dc:Bounds x="1165" y="805" width="50" height="50" />
+        <dc:Bounds x="1035" y="935" width="50" height="50" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_CheckFee" bpmnElement="Gateway_CRM_CheckFee" isMarkerVisible="true">
-        <dc:Bounds x="1255" y="805" width="50" height="50" />
+        <dc:Bounds x="1035" y="1035" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1240" y="862" width="80" height="14" />
+          <dc:Bounds x="1095" y="1053" width="80" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_InitCheckout" bpmnElement="Task_CRM_InitCheckout">
-        <dc:Bounds x="1350" y="790" width="150" height="80" />
+        <dc:Bounds x="985" y="1140" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_EventLoopMerge" bpmnElement="Gateway_CRM_EventLoopMerge" isMarkerVisible="true">
-        <dc:Bounds x="1545" y="805" width="50" height="50" />
+        <dc:Bounds x="1035" y="1265" width="50" height="50" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_WaitEvents" bpmnElement="Gateway_CRM_WaitEvents">
-        <dc:Bounds x="1710" y="805" width="50" height="50" />
+        <dc:Bounds x="1035" y="1415" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1630" y="772" width="90" height="27" />
+          <dc:Bounds x="955" y="1405" width="80" height="27" />
         </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_Event_CRM_WebhookSuccess" bpmnElement="Event_CRM_WebhookSuccess">
-        <dc:Bounds x="1830" y="812" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="1798" y="775" width="100" height="27" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_Task_CRM_VerifySuccessSig" bpmnElement="Task_CRM_VerifySuccessSig">
-        <dc:Bounds x="1910" y="790" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Event_CRM_WebhookFailed" bpmnElement="Event_CRM_WebhookFailed">
-        <dc:Bounds x="1830" y="927" width="36" height="36" />
+        <dc:Bounds x="1322" y="1602" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1798" y="893" width="100" height="27" />
+          <dc:Bounds x="1215" y="1606" width="100" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_HandleFail" bpmnElement="Task_CRM_HandleFail">
-        <dc:Bounds x="1910" y="905" width="150" height="80" />
+        <dc:Bounds x="1265" y="1675" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_CheckRetry" bpmnElement="Gateway_CRM_CheckRetry" isMarkerVisible="true">
-        <dc:Bounds x="2085" y="920" width="50" height="50" />
+        <dc:Bounds x="1315" y="1835" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2062" y="886" width="96" height="27" />
+          <dc:Bounds x="1372" y="1846" width="96" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Event_CRM_CatchRetry" bpmnElement="Event_CRM_CatchRetry">
-        <dc:Bounds x="2165" y="927" width="36" height="36" />
+        <dc:Bounds x="1322" y="1952" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2138" y="968" width="90" height="27" />
+          <dc:Bounds x="1368" y="1956" width="90" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_CreateRetrySession" bpmnElement="Task_CRM_CreateRetrySession">
-        <dc:Bounds x="2235" y="905" width="150" height="80" />
+        <dc:Bounds x="1265" y="2050" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Event_CRM_TimerTtl" bpmnElement="Event_CRM_TimerTtl">
-        <dc:Bounds x="1830" y="1032" width="36" height="36" />
+        <dc:Bounds x="812" y="1602" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1798" y="1073" width="100" height="27" />
+          <dc:Bounds x="735" y="1596" width="72" height="40" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_MergeExpire" bpmnElement="Gateway_CRM_MergeExpire" isMarkerVisible="true">
-        <dc:Bounds x="2085" y="1025" width="50" height="50" />
+        <dc:Bounds x="805" y="2105" width="50" height="50" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_ExpireSession" bpmnElement="Task_CRM_ExpireSession">
-        <dc:Bounds x="2390" y="1010" width="155" height="80" />
+        <dc:Bounds x="755" y="2190" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_EndEvent_CRM_Expired" bpmnElement="EndEvent_CRM_Expired">
-        <dc:Bounds x="2592" y="1032" width="36" height="36" />
+        <dc:Bounds x="812" y="2302" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2565" y="1075" width="90" height="27" />
+          <dc:Bounds x="785" y="2345" width="90" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
+      <bpmndi:BPMNShape id="Shape_Event_CRM_WebhookSuccess" bpmnElement="Event_CRM_WebhookSuccess">
+        <dc:Bounds x="1042" y="2252" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1088" y="2235" width="100" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_CRM_VerifySuccessSig" bpmnElement="Task_CRM_VerifySuccessSig">
+        <dc:Bounds x="985" y="2320" width="150" height="80" />
+      </bpmndi:BPMNShape>
+
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_MergeToConfirm" bpmnElement="Gateway_CRM_MergeToConfirm" isMarkerVisible="true">
-        <dc:Bounds x="2420" y="805" width="50" height="50" />
+        <dc:Bounds x="1035" y="2425" width="50" height="50" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_ParFork" bpmnElement="Gateway_CRM_ParFork">
-        <dc:Bounds x="2505" y="805" width="50" height="50" />
+        <dc:Bounds x="1035" y="2505" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2518" y="860" width="24" height="14" />
+          <dc:Bounds x="1095" y="2523" width="24" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_UpdatePaid" bpmnElement="Task_CRM_UpdatePaid">
-        <dc:Bounds x="2600" y="790" width="155" height="80" />
+        <dc:Bounds x="985" y="2580" width="155" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_PushConfirmed" bpmnElement="Task_CRM_PushConfirmed">
-        <dc:Bounds x="2600" y="610" width="155" height="80" />
+        <dc:Bounds x="755" y="2580" width="155" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Gateway_CRM_ParJoin" bpmnElement="Gateway_CRM_ParJoin">
-        <dc:Bounds x="2795" y="805" width="50" height="50" />
+        <dc:Bounds x="1035" y="2695" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2810" y="860" width="21" height="14" />
+          <dc:Bounds x="1095" y="2713" width="21" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_CRM_AckWebhook" bpmnElement="Task_CRM_AckWebhook">
-        <dc:Bounds x="2875" y="790" width="135" height="80" />
+        <dc:Bounds x="985" y="2775" width="150" height="80" />
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_EndEvent_CRM_Success" bpmnElement="EndEvent_CRM_Success">
-        <dc:Bounds x="3045" y="812" width="36" height="36" />
+        <dc:Bounds x="1042" y="2882" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="3018" y="855" width="90" height="40" />
+          <dc:Bounds x="1015" y="2925" width="90" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
       <!-- ==================== SEQUENCE FLOW EDGES IN POOL 1: USER ==================== -->
       <bpmndi:BPMNEdge id="Edge_Flow_U1" bpmnElement="Flow_U1">
-        <di:waypoint x="228" y="250" />
-        <di:waypoint x="280" y="250" />
+        <di:waypoint x="330" y="168" />
+        <di:waypoint x="330" y="220" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U2" bpmnElement="Flow_U2">
-        <di:waypoint x="430" y="250" />
-        <di:waypoint x="485" y="250" />
+        <di:waypoint x="330" y="300" />
+        <di:waypoint x="330" y="355" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_ToReject" bpmnElement="Flow_U_ToReject">
-        <di:waypoint x="510" y="225" />
-        <di:waypoint x="510" y="120" />
-        <di:waypoint x="952" y="120" />
+        <di:waypoint x="305" y="380" />
+        <di:waypoint x="160" y="380" />
+        <di:waypoint x="160" y="712" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_Reject1" bpmnElement="Flow_U_Reject1">
-        <di:waypoint x="988" y="120" />
-        <di:waypoint x="1040" y="120" />
+        <di:waypoint x="160" y="748" />
+        <di:waypoint x="160" y="810" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_Reject2" bpmnElement="Flow_U_Reject2">
-        <di:waypoint x="1180" y="120" />
-        <di:waypoint x="1222" y="120" />
+        <di:waypoint x="160" y="890" />
+        <di:waypoint x="160" y="942" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_ToCheckout" bpmnElement="Flow_U_ToCheckout">
-        <di:waypoint x="535" y="250" />
-        <di:waypoint x="1407" y="250" />
+        <di:waypoint x="330" y="405" />
+        <di:waypoint x="330" y="1162" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_ToFreeConfirm" bpmnElement="Flow_U_ToFreeConfirm">
-        <di:waypoint x="510" y="225" />
-        <di:waypoint x="510" y="180" />
-        <di:waypoint x="2677" y="180" />
-        <di:waypoint x="2677" y="232" />
+        <di:waypoint x="305" y="380" />
+        <di:waypoint x="240" y="380" />
+        <di:waypoint x="240" y="1030" />
+        <di:waypoint x="115" y="1030" />
+        <di:waypoint x="115" y="2560" />
+        <di:waypoint x="330" y="2560" />
+        <di:waypoint x="330" y="2602" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1310" y="160" width="80" height="14" />
+          <dc:Bounds x="140" y="1010" width="80" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_Checkout1" bpmnElement="Flow_U_Checkout1">
-        <di:waypoint x="1443" y="250" />
-        <di:waypoint x="1500" y="250" />
+        <di:waypoint x="330" y="1198" />
+        <di:waypoint x="330" y="1265" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_ToSubmitCard" bpmnElement="Flow_U_ToSubmitCard">
-        <di:waypoint x="1550" y="250" />
-        <di:waypoint x="1585" y="250" />
+        <di:waypoint x="330" y="1315" />
+        <di:waypoint x="330" y="1360" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_AfterSubmitCard" bpmnElement="Flow_U_AfterSubmitCard">
-        <di:waypoint x="1735" y="250" />
-        <di:waypoint x="1775" y="250" />
+        <di:waypoint x="330" y="1440" />
+        <di:waypoint x="330" y="1495" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_ToPaySuccess" bpmnElement="Flow_U_ToPaySuccess">
-        <di:waypoint x="1825" y="250" />
-        <di:waypoint x="2659" y="250" />
+        <di:waypoint x="330" y="1545" />
+        <di:waypoint x="330" y="2602" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_ToPayError" bpmnElement="Flow_U_ToPayError">
-        <di:waypoint x="1800" y="275" />
-        <di:waypoint x="1800" y="370" />
-        <di:waypoint x="1930" y="370" />
+        <di:waypoint x="355" y="1520" />
+        <di:waypoint x="485" y="1520" />
+        <di:waypoint x="485" y="1752" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_PayError1" bpmnElement="Flow_U_PayError1">
-        <di:waypoint x="1966" y="370" />
-        <di:waypoint x="2015" y="370" />
+        <di:waypoint x="485" y="1788" />
+        <di:waypoint x="485" y="1835" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_RetryYes" bpmnElement="Flow_U_RetryYes">
-        <di:waypoint x="2065" y="370" />
-        <di:waypoint x="2105" y="370" />
+        <di:waypoint x="485" y="1885" />
+        <di:waypoint x="485" y="1930" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2074" y="352" width="19" height="14" />
+          <dc:Bounds x="492" y="1898" width="19" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_Retry1" bpmnElement="Flow_U_Retry1">
-        <di:waypoint x="2245" y="370" />
-        <di:waypoint x="2285" y="370" />
+        <di:waypoint x="485" y="2010" />
+        <di:waypoint x="485" y="2072" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_RetryLoopBack" bpmnElement="Flow_U_RetryLoopBack">
-        <di:waypoint x="2303" y="388" />
-        <di:waypoint x="2303" y="465" />
-        <di:waypoint x="1525" y="465" />
-        <di:waypoint x="1525" y="275" />
+        <di:waypoint x="485" y="2108" />
+        <di:waypoint x="485" y="2140" />
+        <di:waypoint x="575" y="2140" />
+        <di:waypoint x="575" y="1290" />
+        <di:waypoint x="355" y="1290" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_RetryNo" bpmnElement="Flow_U_RetryNo">
-        <di:waypoint x="2040" y="395" />
-        <di:waypoint x="2040" y="420" />
+        <di:waypoint x="460" y="1860" />
+        <di:waypoint x="408" y="1860" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2048" y="398" width="12" height="14" />
+          <dc:Bounds x="428" y="1842" width="12" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_ToExpired" bpmnElement="Flow_U_ToExpired">
-        <di:waypoint x="1800" y="275" />
-        <di:waypoint x="1800" y="295" />
-        <di:waypoint x="2465" y="295" />
-        <di:waypoint x="2465" y="352" />
+        <di:waypoint x="305" y="1520" />
+        <di:waypoint x="215" y="1520" />
+        <di:waypoint x="215" y="2212" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_Expired1" bpmnElement="Flow_U_Expired1">
-        <di:waypoint x="2483" y="370" />
-        <di:waypoint x="2532" y="370" />
+        <di:waypoint x="215" y="2248" />
+        <di:waypoint x="215" y="2302" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_Confirmed1" bpmnElement="Flow_U_Confirmed1">
-        <di:waypoint x="2695" y="250" />
-        <di:waypoint x="2745" y="250" />
+        <di:waypoint x="330" y="2638" />
+        <di:waypoint x="330" y="2720" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_U_Confirmed2" bpmnElement="Flow_U_Confirmed2">
-        <di:waypoint x="2895" y="250" />
-        <di:waypoint x="2942" y="250" />
+        <di:waypoint x="330" y="2800" />
+        <di:waypoint x="330" y="2842" />
       </bpmndi:BPMNEdge>
 
       <!-- ==================== SEQUENCE FLOW EDGES IN POOL 2: CRM ==================== -->
       <bpmndi:BPMNEdge id="Edge_Flow_C1" bpmnElement="Flow_C1">
-        <di:waypoint x="373" y="830" />
-        <di:waypoint x="420" y="830" />
+        <di:waypoint x="1060" y="278" />
+        <di:waypoint x="1060" y="340" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C2" bpmnElement="Flow_C2">
-        <di:waypoint x="565" y="830" />
-        <di:waypoint x="605" y="830" />
+        <di:waypoint x="1060" y="420" />
+        <di:waypoint x="1060" y="460" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C3" bpmnElement="Flow_C3">
-        <di:waypoint x="760" y="830" />
-        <di:waypoint x="800" y="830" />
+        <di:waypoint x="1060" y="540" />
+        <di:waypoint x="1060" y="595" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToReject" bpmnElement="Flow_C_ToReject">
-        <di:waypoint x="825" y="805" />
-        <di:waypoint x="825" y="615" />
-        <di:waypoint x="900" y="615" />
+        <di:waypoint x="1035" y="620" />
+        <di:waypoint x="830" y="620" />
+        <di:waypoint x="830" y="690" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="745" y="625" width="75" height="40" />
+          <dc:Bounds x="850" y="626" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_RejectEnd" bpmnElement="Flow_C_RejectEnd">
-        <di:waypoint x="1045" y="615" />
-        <di:waypoint x="1092" y="615" />
+        <di:waypoint x="830" y="770" />
+        <di:waypoint x="830" y="832" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToPendingResume" bpmnElement="Flow_C_ToPendingResume">
-        <di:waypoint x="825" y="805" />
-        <di:waypoint x="825" y="710" />
-        <di:waypoint x="905" y="710" />
+        <di:waypoint x="1085" y="620" />
+        <di:waypoint x="1340" y="620" />
+        <di:waypoint x="1340" y="705" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="830" y="720" width="75" height="14" />
+          <dc:Bounds x="1165" y="600" width="80" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_TtlExpiredYes" bpmnElement="Flow_C_TtlExpiredYes">
-        <di:waypoint x="955" y="710" />
-        <di:waypoint x="995" y="710" />
+        <di:waypoint x="1340" y="755" />
+        <di:waypoint x="1340" y="810" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="965" y="692" width="19" height="14" />
+          <dc:Bounds x="1348" y="775" width="19" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_AfterUpdateTtl" bpmnElement="Flow_C_AfterUpdateTtl">
-        <di:waypoint x="1135" y="710" />
-        <di:waypoint x="1165" y="710" />
+        <di:waypoint x="1340" y="890" />
+        <di:waypoint x="1340" y="935" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_TtlExpiredNo" bpmnElement="Flow_C_TtlExpiredNo">
-        <di:waypoint x="930" y="735" />
-        <di:waypoint x="930" y="768" />
-        <di:waypoint x="1190" y="768" />
-        <di:waypoint x="1190" y="735" />
+        <di:waypoint x="1315" y="730" />
+        <di:waypoint x="1230" y="730" />
+        <di:waypoint x="1230" y="960" />
+        <di:waypoint x="1315" y="960" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="940" y="748" width="12" height="14" />
+          <dc:Bounds x="1238" y="840" width="12" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_PendingMerged" bpmnElement="Flow_C_PendingMerged">
-        <di:waypoint x="1190" y="735" />
-        <di:waypoint x="1190" y="805" />
+        <di:waypoint x="1315" y="960" />
+        <di:waypoint x="1085" y="960" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToNewInsert" bpmnElement="Flow_C_ToNewInsert">
-        <di:waypoint x="850" y="830" />
-        <di:waypoint x="960" y="830" />
+        <di:waypoint x="1060" y="645" />
+        <di:waypoint x="1060" y="810" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="868" y="812" width="70" height="14" />
+          <dc:Bounds x="1068" y="715" width="70" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_AfterInsert" bpmnElement="Flow_C_AfterInsert">
-        <di:waypoint x="1115" y="830" />
-        <di:waypoint x="1165" y="830" />
+        <di:waypoint x="1060" y="890" />
+        <di:waypoint x="1060" y="935" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToCheckFee" bpmnElement="Flow_C_ToCheckFee">
-        <di:waypoint x="1215" y="830" />
-        <di:waypoint x="1255" y="830" />
+        <di:waypoint x="1060" y="985" />
+        <di:waypoint x="1060" y="1035" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_FeePositive" bpmnElement="Flow_C_FeePositive">
-        <di:waypoint x="1305" y="830" />
-        <di:waypoint x="1350" y="830" />
+        <di:waypoint x="1060" y="1085" />
+        <di:waypoint x="1060" y="1140" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1285" y="782" width="70" height="14" />
+          <dc:Bounds x="1068" y="1102" width="70" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_FeeZero" bpmnElement="Flow_C_FeeZero">
-        <di:waypoint x="1280" y="805" />
-        <di:waypoint x="1280" y="740" />
-        <di:waypoint x="2445" y="740" />
-        <di:waypoint x="2445" y="805" />
+        <di:waypoint x="1035" y="1060" />
+        <di:waypoint x="945" y="1060" />
+        <di:waypoint x="945" y="2450" />
+        <di:waypoint x="1035" y="2450" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1815" y="720" width="80" height="14" />
+          <dc:Bounds x="860" y="1038" width="80" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_AfterInitCheckout" bpmnElement="Flow_C_AfterInitCheckout">
-        <di:waypoint x="1500" y="830" />
-        <di:waypoint x="1545" y="830" />
+        <di:waypoint x="1060" y="1220" />
+        <di:waypoint x="1060" y="1265" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToWaitEvents" bpmnElement="Flow_C_ToWaitEvents">
-        <di:waypoint x="1595" y="830" />
-        <di:waypoint x="1710" y="830" />
+        <di:waypoint x="1060" y="1315" />
+        <di:waypoint x="1060" y="1415" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToWebhookSuccess" bpmnElement="Flow_C_ToWebhookSuccess">
-        <di:waypoint x="1760" y="830" />
-        <di:waypoint x="1830" y="830" />
+        <di:waypoint x="1060" y="1465" />
+        <di:waypoint x="1060" y="2252" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_AfterWebhookSuccess" bpmnElement="Flow_C_AfterWebhookSuccess">
-        <di:waypoint x="1866" y="830" />
-        <di:waypoint x="1910" y="830" />
+        <di:waypoint x="1060" y="2288" />
+        <di:waypoint x="1060" y="2320" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_VerifiedSuccess" bpmnElement="Flow_C_VerifiedSuccess">
-        <di:waypoint x="2060" y="830" />
-        <di:waypoint x="2420" y="830" />
+        <di:waypoint x="1060" y="2400" />
+        <di:waypoint x="1060" y="2425" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToWebhookFailed" bpmnElement="Flow_C_ToWebhookFailed">
-        <di:waypoint x="1735" y="855" />
-        <di:waypoint x="1735" y="945" />
-        <di:waypoint x="1830" y="945" />
+        <di:waypoint x="1085" y="1440" />
+        <di:waypoint x="1340" y="1440" />
+        <di:waypoint x="1340" y="1602" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_AfterWebhookFailed" bpmnElement="Flow_C_AfterWebhookFailed">
-        <di:waypoint x="1866" y="945" />
-        <di:waypoint x="1910" y="945" />
+        <di:waypoint x="1340" y="1638" />
+        <di:waypoint x="1340" y="1675" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToCheckRetry" bpmnElement="Flow_C_ToCheckRetry">
-        <di:waypoint x="2060" y="945" />
-        <di:waypoint x="2085" y="945" />
+        <di:waypoint x="1340" y="1755" />
+        <di:waypoint x="1340" y="1835" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_AllowRetryYes" bpmnElement="Flow_C_AllowRetryYes">
-        <di:waypoint x="2135" y="945" />
-        <di:waypoint x="2165" y="945" />
+        <di:waypoint x="1340" y="1885" />
+        <di:waypoint x="1340" y="1952" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2140" y="927" width="19" height="14" />
+          <dc:Bounds x="1348" y="1905" width="19" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_AfterCatchRetry" bpmnElement="Flow_C_AfterCatchRetry">
-        <di:waypoint x="2201" y="945" />
-        <di:waypoint x="2235" y="945" />
+        <di:waypoint x="1340" y="1988" />
+        <di:waypoint x="1340" y="2050" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_RetryLoopBack" bpmnElement="Flow_C_RetryLoopBack">
-        <di:waypoint x="2385" y="945" />
-        <di:waypoint x="2405" y="945" />
-        <di:waypoint x="2405" y="885" />
-        <di:waypoint x="1570" y="885" />
-        <di:waypoint x="1570" y="855" />
+        <di:waypoint x="1340" y="2130" />
+        <di:waypoint x="1340" y="2160" />
+        <di:waypoint x="1475" y="2160" />
+        <di:waypoint x="1475" y="1290" />
+        <di:waypoint x="1085" y="1290" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_AllowRetryNo" bpmnElement="Flow_C_AllowRetryNo">
-        <di:waypoint x="2110" y="970" />
-        <di:waypoint x="2110" y="1025" />
+        <di:waypoint x="1315" y="1860" />
+        <di:waypoint x="1180" y="1860" />
+        <di:waypoint x="1180" y="2130" />
+        <di:waypoint x="855" y="2130" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2118" y="988" width="12" height="14" />
+          <dc:Bounds x="1240" y="1842" width="12" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToTimerTtl" bpmnElement="Flow_C_ToTimerTtl">
-        <di:waypoint x="1735" y="855" />
-        <di:waypoint x="1735" y="1050" />
-        <di:waypoint x="1830" y="1050" />
+        <di:waypoint x="1035" y="1440" />
+        <di:waypoint x="830" y="1440" />
+        <di:waypoint x="830" y="1602" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_TimerTriggered" bpmnElement="Flow_C_TimerTriggered">
-        <di:waypoint x="1866" y="1050" />
-        <di:waypoint x="2085" y="1050" />
+        <di:waypoint x="830" y="1638" />
+        <di:waypoint x="830" y="2105" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToExpireTask" bpmnElement="Flow_C_ToExpireTask">
-        <di:waypoint x="2135" y="1050" />
-        <di:waypoint x="2390" y="1050" />
+        <di:waypoint x="830" y="2155" />
+        <di:waypoint x="830" y="2190" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToExpireEnd" bpmnElement="Flow_C_ToExpireEnd">
-        <di:waypoint x="2545" y="1050" />
-        <di:waypoint x="2592" y="1050" />
+        <di:waypoint x="830" y="2270" />
+        <di:waypoint x="830" y="2302" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToParFork" bpmnElement="Flow_C_ToParFork">
-        <di:waypoint x="2470" y="830" />
-        <di:waypoint x="2505" y="830" />
+        <di:waypoint x="1060" y="2475" />
+        <di:waypoint x="1060" y="2505" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ParBranch1" bpmnElement="Flow_C_ParBranch1">
-        <di:waypoint x="2555" y="830" />
-        <di:waypoint x="2600" y="830" />
+        <di:waypoint x="1060" y="2555" />
+        <di:waypoint x="1060" y="2580" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ParBranch2" bpmnElement="Flow_C_ParBranch2">
-        <di:waypoint x="2530" y="805" />
-        <di:waypoint x="2530" y="650" />
-        <di:waypoint x="2600" y="650" />
+        <di:waypoint x="1035" y="2530" />
+        <di:waypoint x="832" y="2530" />
+        <di:waypoint x="832" y="2580" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ParJoin1" bpmnElement="Flow_C_ParJoin1">
-        <di:waypoint x="2755" y="830" />
-        <di:waypoint x="2795" y="830" />
+        <di:waypoint x="1060" y="2660" />
+        <di:waypoint x="1060" y="2695" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ParJoin2" bpmnElement="Flow_C_ParJoin2">
-        <di:waypoint x="2755" y="650" />
-        <di:waypoint x="2820" y="650" />
-        <di:waypoint x="2820" y="805" />
+        <di:waypoint x="832" y="2660" />
+        <di:waypoint x="832" y="2720" />
+        <di:waypoint x="1035" y="2720" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_AfterParJoin" bpmnElement="Flow_C_AfterParJoin">
-        <di:waypoint x="2845" y="830" />
-        <di:waypoint x="2875" y="830" />
+        <di:waypoint x="1060" y="2745" />
+        <di:waypoint x="1060" y="2775" />
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToSuccessEnd" bpmnElement="Flow_C_ToSuccessEnd">
-        <di:waypoint x="3010" y="830" />
-        <di:waypoint x="3045" y="830" />
+        <di:waypoint x="1060" y="2855" />
+        <di:waypoint x="1060" y="2882" />
       </bpmndi:BPMNEdge>
 
-      <!-- ==================== MESSAGE FLOW EDGES ==================== -->
+      <!-- ==================== HORIZONTAL MESSAGE FLOW EDGES ==================== -->
       <bpmndi:BPMNEdge id="Edge_MF_RegisterReq" bpmnElement="MF_RegisterReq">
-        <di:waypoint x="355" y="290" />
-        <di:waypoint x="355" y="812" />
+        <di:waypoint x="405" y="260" />
+        <di:waypoint x="1042" y="260" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="240" y="500" width="108" height="27" />
+          <dc:Bounds x="610" y="226" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_RejectResp" bpmnElement="MF_RejectResp">
-        <di:waypoint x="970" y="575" />
-        <di:waypoint x="970" y="138" />
+        <di:waypoint x="755" y="730" />
+        <di:waypoint x="178" y="730" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="862" y="500" width="100" height="27" />
+          <dc:Bounds x="612" y="696" width="105" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_CreateSession" bpmnElement="MF_CreateSession">
-        <di:waypoint x="1395" y="870" />
-        <di:waypoint x="1395" y="1210" />
+        <di:waypoint x="1135" y="1160" />
+        <di:waypoint x="1630" y="1160" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1280" y="1155" width="108" height="27" />
+          <dc:Bounds x="1510" y="1126" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_SessionCreated" bpmnElement="MF_SessionCreated">
-        <di:waypoint x="1455" y="1210" />
-        <di:waypoint x="1455" y="870" />
+        <di:waypoint x="1630" y="1200" />
+        <di:waypoint x="1135" y="1200" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1462" y="1155" width="110" height="27" />
+          <dc:Bounds x="1510" y="1206" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_CheckoutUrl" bpmnElement="MF_CheckoutUrl">
-        <di:waypoint x="1425" y="790" />
-        <di:waypoint x="1425" y="268" />
+        <di:waypoint x="985" y="1180" />
+        <di:waypoint x="348" y="1180" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1432" y="500" width="90" height="27" />
+          <dc:Bounds x="615" y="1146" width="95" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_SubmitCard" bpmnElement="MF_SubmitCard">
-        <di:waypoint x="1660" y="290" />
-        <di:waypoint x="1660" y="1210" />
+        <di:waypoint x="405" y="1385" />
+        <di:waypoint x="1630" y="1385" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1545" y="500" width="108" height="27" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_MF_WebhookSuccess" bpmnElement="MF_WebhookSuccess">
-        <di:waypoint x="1810" y="1210" />
-        <di:waypoint x="1810" y="875" />
-        <di:waypoint x="1848" y="875" />
-        <di:waypoint x="1848" y="848" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="1700" y="1155" width="105" height="27" />
+          <dc:Bounds x="610" y="1350" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_WebhookFailed" bpmnElement="MF_WebhookFailed">
-        <di:waypoint x="1848" y="1210" />
-        <di:waypoint x="1848" y="963" />
+        <di:waypoint x="1630" y="1620" />
+        <di:waypoint x="1358" y="1620" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1855" y="1155" width="85" height="27" />
+          <dc:Bounds x="1515" y="1586" width="100" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_WebhookFailAck" bpmnElement="MF_WebhookFailAck">
-        <di:waypoint x="1985" y="985" />
-        <di:waypoint x="1985" y="1210" />
+        <di:waypoint x="1415" y="1715" />
+        <di:waypoint x="1630" y="1715" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1992" y="1160" width="75" height="14" />
+          <dc:Bounds x="1525" y="1693" width="80" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_RedirectFail" bpmnElement="MF_RedirectFail">
-        <di:waypoint x="1780" y="1210" />
-        <di:waypoint x="1780" y="420" />
-        <di:waypoint x="1948" y="420" />
-        <di:waypoint x="1948" y="388" />
+        <di:waypoint x="1630" y="1770" />
+        <di:waypoint x="503" y="1770" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1670" y="505" width="105" height="14" />
+          <dc:Bounds x="612" y="1748" width="105" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_RetryReq" bpmnElement="MF_RetryReq">
-        <di:waypoint x="2183" y="410" />
-        <di:waypoint x="2183" y="927" />
+        <di:waypoint x="555" y="1970" />
+        <di:waypoint x="1322" y="1970" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2075" y="500" width="100" height="27" />
+          <dc:Bounds x="612" y="1936" width="105" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_RetrySessionReq" bpmnElement="MF_RetrySessionReq">
-        <di:waypoint x="2280" y="985" />
-        <di:waypoint x="2280" y="1210" />
+        <di:waypoint x="1415" y="2070" />
+        <di:waypoint x="1630" y="2070" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2165" y="1155" width="108" height="27" />
+          <dc:Bounds x="1510" y="2036" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_RetrySessionResp" bpmnElement="MF_RetrySessionResp">
-        <di:waypoint x="2340" y="1210" />
-        <di:waypoint x="2340" y="985" />
+        <di:waypoint x="1630" y="2110" />
+        <di:waypoint x="1415" y="2110" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2348" y="1155" width="110" height="27" />
+          <dc:Bounds x="1510" y="2116" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_RetryCheckoutUrl" bpmnElement="MF_RetryCheckoutUrl">
-        <di:waypoint x="2303" y="905" />
-        <di:waypoint x="2303" y="388" />
+        <di:waypoint x="1265" y="2090" />
+        <di:waypoint x="503" y="2090" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2310" y="500" width="110" height="27" />
+          <dc:Bounds x="610" y="2056" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_PushExpired" bpmnElement="MF_PushExpired">
-        <di:waypoint x="2465" y="1010" />
-        <di:waypoint x="2465" y="388" />
+        <di:waypoint x="755" y="2230" />
+        <di:waypoint x="233" y="2230" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2472" y="500" width="120" height="27" />
+          <dc:Bounds x="605" y="2196" width="120" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_WebhookSuccess" bpmnElement="MF_WebhookSuccess">
+        <di:waypoint x="1630" y="2270" />
+        <di:waypoint x="1078" y="2270" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1510" y="2236" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_PushConfirmed" bpmnElement="MF_PushConfirmed">
-        <di:waypoint x="2677" y="610" />
-        <di:waypoint x="2677" y="268" />
+        <di:waypoint x="755" y="2620" />
+        <di:waypoint x="348" y="2620" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2685" y="500" width="155" height="27" />
+          <dc:Bounds x="598" y="2582" width="135" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="Edge_MF_WebhookSuccessAck" bpmnElement="MF_WebhookSuccessAck">
-        <di:waypoint x="2942" y="870" />
-        <di:waypoint x="2942" y="1210" />
+        <di:waypoint x="1135" y="2815" />
+        <di:waypoint x="1630" y="2815" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="2950" y="1155" width="105" height="27" />
+          <dc:Bounds x="1510" y="2780" width="110" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
