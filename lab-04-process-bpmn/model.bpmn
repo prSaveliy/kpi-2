@@ -273,16 +273,14 @@
     <!-- Етап 3: Оплата, повторні спроби (Retry) та очікування подій -->
     <bpmn:exclusiveGateway id="Gateway_CRM_EventLoopMerge">
       <bpmn:incoming>Flow_C_AfterInitCheckout</bpmn:incoming>
-      <bpmn:incoming>Flow_C_AfterHandleFail</bpmn:incoming>
       <bpmn:incoming>Flow_C_RetryLoopBack</bpmn:incoming>
       <bpmn:outgoing>Flow_C_ToWaitEvents</bpmn:outgoing>
     </bpmn:exclusiveGateway>
 
-    <bpmn:eventBasedGateway id="Gateway_CRM_WaitEvents" name="Очікування події оплати або TTL">
+    <bpmn:eventBasedGateway id="Gateway_CRM_WaitEvents" name="Очікування Webhook або TTL">
       <bpmn:incoming>Flow_C_ToWaitEvents</bpmn:incoming>
       <bpmn:outgoing>Flow_C_ToWebhookSuccess</bpmn:outgoing>
       <bpmn:outgoing>Flow_C_ToWebhookFailed</bpmn:outgoing>
-      <bpmn:outgoing>Flow_C_ToCatchRetry</bpmn:outgoing>
       <bpmn:outgoing>Flow_C_ToTimerTtl</bpmn:outgoing>
     </bpmn:eventBasedGateway>
 
@@ -312,10 +310,9 @@
 
     <bpmn:serviceTask id="Task_CRM_HandleFail" name="Перевірити підпис, зберегти PENDING та відповісти 200 OK">
       <bpmn:incoming>Flow_C_AfterWebhookFailed</bpmn:incoming>
-      <bpmn:outgoing>Flow_C_AfterHandleFail</bpmn:outgoing>
+      <bpmn:outgoing>Flow_C_ToCatchRetry</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <!-- Подія 3: POST /retry-payment -->
     <bpmn:intermediateCatchEvent id="Event_CRM_CatchRetry" name="Отримано POST /retry-payment">
       <bpmn:incoming>Flow_C_ToCatchRetry</bpmn:incoming>
       <bpmn:outgoing>Flow_C_AfterCatchRetry</bpmn:outgoing>
@@ -421,8 +418,7 @@
     <bpmn:sequenceFlow id="Flow_C_AfterAckWebhook" sourceRef="Task_CRM_AckWebhook" targetRef="Gateway_CRM_MergeToConfirm" />
     <bpmn:sequenceFlow id="Flow_C_ToWebhookFailed" sourceRef="Gateway_CRM_WaitEvents" targetRef="Event_CRM_WebhookFailed" />
     <bpmn:sequenceFlow id="Flow_C_AfterWebhookFailed" sourceRef="Event_CRM_WebhookFailed" targetRef="Task_CRM_HandleFail" />
-    <bpmn:sequenceFlow id="Flow_C_AfterHandleFail" sourceRef="Task_CRM_HandleFail" targetRef="Gateway_CRM_EventLoopMerge" />
-    <bpmn:sequenceFlow id="Flow_C_ToCatchRetry" sourceRef="Gateway_CRM_WaitEvents" targetRef="Event_CRM_CatchRetry" />
+    <bpmn:sequenceFlow id="Flow_C_ToCatchRetry" sourceRef="Task_CRM_HandleFail" targetRef="Event_CRM_CatchRetry" />
     <bpmn:sequenceFlow id="Flow_C_AfterCatchRetry" sourceRef="Event_CRM_CatchRetry" targetRef="Gateway_CRM_CheckRetry" />
     <bpmn:sequenceFlow id="Flow_C_AllowRetryYes" name="Так" sourceRef="Gateway_CRM_CheckRetry" targetRef="Task_CRM_CreateRetrySession" />
     <bpmn:sequenceFlow id="Flow_C_ToSendRetryUrl" sourceRef="Task_CRM_CreateRetrySession" targetRef="Task_CRM_SendRetryUrl" />
@@ -1078,19 +1074,8 @@
         <di:waypoint x="1340" y="1795" />
       </bpmndi:BPMNEdge>
 
-      <bpmndi:BPMNEdge id="Edge_Flow_C_AfterHandleFail" bpmnElement="Flow_C_AfterHandleFail">
-        <di:waypoint x="1340" y="1875" />
-        <di:waypoint x="1340" y="1915" />
-        <di:waypoint x="1475" y="1915" />
-        <di:waypoint x="1475" y="1410" />
-        <di:waypoint x="1085" y="1410" />
-      </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Edge_Flow_C_ToCatchRetry" bpmnElement="Flow_C_ToCatchRetry">
-        <di:waypoint x="1085" y="1560" />
-        <di:waypoint x="1185" y="1560" />
-        <di:waypoint x="1185" y="2030" />
-        <di:waypoint x="1340" y="2030" />
+        <di:waypoint x="1340" y="1875" />
         <di:waypoint x="1340" y="2072" />
       </bpmndi:BPMNEdge>
 
