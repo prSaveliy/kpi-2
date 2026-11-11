@@ -31,18 +31,17 @@
 ### Етап 3. Оплата, повторні спроби (Retry) та очікування подій
 6. **Подання платіжних даних (`User Task` у пулі Користувача):** введення реквізитів картки та відправка `submitPayment(cardDetails, session_id)` $\xrightarrow{\text{Message Flow}}$ `Payment Gateway`.
 7. **Очікування результату транзакції або тайм-ауту (`Event-Based Gateway` у `Billiard CRM`):**
-   - **Webhook `charge.successful` (`Message Catch Event` від `Payment Gateway`):** перевірка HMAC-підпису (`verifyHmacSignature`, `Service Task`) $\rightarrow$ перехід до Етапу 4.
+   - **Webhook `charge.successful` (`Message Catch Event` від `Payment Gateway`):** перевірка HMAC-підпису (`verifyHmacSignature`, `Service Task`) $\rightarrow$ миттєве підтвердження вебхука `200 OK (Webhook Ack)` (`Send Task`) $\xrightarrow{\text{Message Flow}}$ `Payment Gateway` $\rightarrow$ перехід до Етапу 4.
    - **Webhook `charge.failed` (`Message Catch Event` від `Payment Gateway`):** перевірка підпису, збереження статусу `'PENDING'`, відповідь `200 OK` шлюзу (`Service Task`) та повідомлення про помилку оплати користувачу (`redirect failure_url`). Далі `Exclusive Gateway (XOR)` повторної спроби (`attempts < 3 AND now() <= min(deadline, registered_at + 15 min)`):
      - **Повторити:** `clickRetryPayment` (`User Task`) $\xrightarrow{\text{Message Flow: POST /retry-payment}}$ `createRetrySession` (`Service Task`) $\xrightarrow{\text{Message Flow}}$ `Payment Gateway` $\rightarrow$ `Send Task` (`Надіслати новий checkout_url користувачу`) $\xrightarrow{\text{Message Flow}}$ повернення до кроку 6.
      - **Відмова / вичерпано ліміт спроб:** перехід до завершення сесії без оплати.
    - **Тайм-аут броні $\min(15\text{ хв}, \text{deadline})$ (`Timer Catch Event`):** спрацьовує за відсутності вебхука (перевірка підпису не виконується); заявка залишається `'PENDING'` (слот вивільняється у квоті), надсилання `pushEvent("SESSION_EXPIRED")` (`Send Task`) $\xrightarrow{\text{Message Flow}}$ користувачу $\rightarrow$ `End Event`.
 
-### Етап 4. Фіксація оплати в БД та паралельне підтвердження вебхука і сповіщення клієнта
-8. **Оновлення статусу заявки в БД (`Service Task`):** атомарний `UPDATE tournament_registration SET payment_status = 'PAID' WHERE id = ? AND payment_status = 'PENDING'`, що формує `Data Object: tournament_registration [PAID]`.
-9. **Розщеплення потоку (`Parallel Gateway / AND — Fork`):**
-   - **Гілка 1 (`Send Task`):** миттєве повернення `200 OK (Webhook Acknowledged)` $\xrightarrow{\text{Message Flow}}$ `Payment Gateway` (не очікуючи завершення клієнтського пуша).
-   - **Гілка 2 (`Send Task`):** асинхронне надсилання `pushEvent("REGISTRATION_CONFIRMED")` $\xrightarrow{\text{Message Flow}}$ користувачу (`showNotification`) після фіксації `'PAID'` у БД.
-10. **Синхронізація (`Parallel Gateway / AND — Join`):** об'єднання паралельних гілок та успішне завершення процесу (`End Event`) у пулах `Billiard CRM` і Користувача.
+### Етап 4. Паралельне підтвердження реєстрації в БД та сповіщення клієнта
+8. **Злиття шляхів та розщеплення потоку (`XOR Merge` $\rightarrow$ `Parallel Gateway / AND — Fork`):** об'єднує гілку підтвердженого вебхука та гілку безкоштовної участі (`entry_fee == 0`), після чого паралельно запускає:
+   - **Гілка 1 (`Service Task`):** атомарний `UPDATE tournament_registration SET payment_status = 'PAID' WHERE id = ? AND payment_status = 'PENDING'`, що формує `Data Object: tournament_registration [PAID]`.
+   - **Гілка 2 (`Send Task`):** асинхронне надсилання `pushEvent("REGISTRATION_CONFIRMED")` $\xrightarrow{\text{Message Flow}}$ користувачу (`showNotification`).
+9. **Синхронізація (`Parallel Gateway / AND — Join`):** об'єднання паралельних гілок та успішне завершення процесу (`End Event`) у пулах `Billiard CRM` і Користувача.
 
 ## Критерії прийняття
 - [ ] **Артефакт (текст + рендер)** - BPMN діаграма (BPMN 2.0 XML з bpmn.io)
