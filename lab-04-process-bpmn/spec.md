@@ -12,6 +12,35 @@
 
 ## Кроки процесу
 
+### Етап 1. Ініціація заявки та перевірка умов допуску
+1. **Ініціація запиту (`User Task` у пулі Користувача):** натискання «Зареєструватися» (`clickRegister(tournamentId)`) та надсилання `Message Flow`: `POST /api/tournaments/{id}/registrations` із JWT-токеном до `Billiard CRM`.
+2. **Автентифікація (`Service Task` у `Billiard CRM`):** валідація JWT-токена та ролі гравця (`verifyJwtAndRole`).
+3. **Перевірка інваріантів у БД (`Service Task`):** блокуюче читання параметрів турніру (`SELECT ... FOR UPDATE`), підрахунок активних заявок (`payment_status = 'PAID'` або `'PENDING'` із `registered_at + 15 min > NOW()`) та пошук існуючої заявки `existing_reg`.
+4. **Шлюз валідації (`Exclusive Gateway / XOR`):**
+   - **Відмова** (`now() > registration_deadline` $\rightarrow$ `403`, або `active_count >= max_participants` без активної броні $\rightarrow$ `409`, або `existing_reg.payment_status == 'PAID'` $\rightarrow$ `409`): повернення помилки без `INSERT` (`Service Task`) $\xrightarrow{\text{Message Flow}}$ відображення помилки користувачу $\rightarrow$ `End Event`.
+   - **Існуюча заявка `'PENDING'`** (за наявності місць): вкладений `XOR` (`registered_at + 15 min < now()`) — за потреби оновлення `UPDATE registered_at = NOW()` (`Service Task`), перехід до отримання сесії оплати без повторного `INSERT`.
+   - **Нова валідна заявка:** `INSERT INTO tournament_registration (player_id, team_id=NULL, payment_status='PENDING', seed_number=NULL, registered_at=NOW())` (`Service Task`).
+
+### Етап 2. Перевірка платності та створення Checkout-сесії
+5. **Шлюз вартості участі (`Exclusive Gateway / XOR` за умовою `entry_fee > 0`):**
+   - **`entry_fee == 0`:** перехід напряму до Етапу 4 (фіксація `'PAID'` та сповіщення).
+   - **`entry_fee > 0`:** виклик `initiateCheckout` (`Service Task`) $\xrightarrow{\text{Message Flow: POST /v1/checkout/sessions}}$ `Payment Gateway` $\xrightarrow{\text{Message Flow: 200 OK \{session\_id, checkout\_url\}}}$ `Billiard CRM` $\xrightarrow{\text{Message Flow: 201 Created / 200 OK \{checkout\_url\}}}$ перенаправлення користувача на Checkout.
+
+### Етап 3. Оплата, повторні спроби (Retry) та очікування подій
+6. **Подання платіжних даних (`User Task` у пулі Користувача):** введення реквізитів картки та відправка `submitPayment(cardDetails, session_id)` $\xrightarrow{\text{Message Flow}}$ `Payment Gateway`.
+7. **Очікування результату транзакції або тайм-ауту (`Event-Based Gateway` у `Billiard CRM`):**
+   - **Webhook `charge.successful` (`Message Catch Event` від `Payment Gateway`):** перевірка HMAC-підпису (`verifyHmacSignature`, `Service Task`) $\rightarrow$ перехід до Етапу 4.
+   - **Webhook `charge.failed` (`Message Catch Event` від `Payment Gateway`):** перевірка підпису, збереження статусу `'PENDING'`, відповідь `200 OK` шлюзу та повідомлення про помилку оплати користувачу (`redirect failure_url`). Далі `Exclusive Gateway (XOR)` повторної спроби (`attempts < 3 AND now() <= min(deadline, registered_at + 15 min)`):
+     - **Повторити:** `clickRetryPayment` (`User Task`) $\xrightarrow{\text{Message Flow: POST /retry-payment}}$ `createRetrySession` (`Service Task`) $\xrightarrow{\text{Message Flow}}$ `Payment Gateway` $\rightarrow$ новий `checkout_url` $\rightarrow$ повернення до кроку 6.
+     - **Відмова / вичерпано ліміт спроб:** завершення без оплати (`End Event`).
+   - **Тайм-аут броні $\min(15\text{ хв}, \text{deadline})$ (`Timer Catch Event`):** заявка залишається `'PENDING'` (слот вивільняється у квоті), надсилання `pushEvent("SESSION_EXPIRED")` (`Service Task`) $\xrightarrow{\text{Message Flow}}$ користувачу $\rightarrow$ `End Event`.
+
+### Етап 4. Паралельне підтвердження участі та сповіщення
+8. **Розщеплення потоку (`Parallel Gateway / AND — Fork`):**
+   - **Гілка 1 (`Service Task`):** `UPDATE tournament_registration SET payment_status = 'PAID' WHERE id = ? AND payment_status = 'PENDING'`.
+   - **Гілка 2 (`Service Task`):** надсилання `pushEvent("REGISTRATION_CONFIRMED")` $\xrightarrow{\text{Message Flow}}$ користувачу (`showNotification`).
+9. **Синхронізація (`Parallel Gateway / AND — Join`):** повернення `200 OK (Webhook Acknowledged)` $\xrightarrow{\text{Message Flow}}$ `Payment Gateway` та успішне завершення процесу (`End Event`) у пулах `Billiard CRM` і Користувача.
+
 ## Критерії прийняття
 - [ ] **Артефакт (текст + рендер)** - BPMN діаграма (BPMN 2.0 XML з bpmn.io)
 - [ ] є ≥1 розгалуження й ≥1 паралельна гілка
