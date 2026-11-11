@@ -130,3 +130,27 @@
      4. **`Отримано POST /retry-payment`** $\rightarrow$ `XOR (attempts < 3 та TTL дійсний?)`:
         - `Так` $\rightarrow$ `createRetrySession` $\rightarrow$ `Надіслати новий checkout_url користувачу` $\rightarrow$ повернення на вхід цього ж `Event-Based Gateway`;
         - `Ні` $\rightarrow$ `Залишити PENDING, надіслати SESSION_EXPIRED` $\rightarrow$ `End Event`.
+
+---
+
+## Prompt (Уточнення: збереження 3 гілок у `Event-Based Gateway` із послідовним очікуванням `POST /retry-payment` у гілці `charge.failed`)
+
+```
+ні, я мав наувазі чи не буде правильніше залшишити 3 гілки як і було, де після перевірки підпису у failed ми чекаємо на retry-payment?
+```
+
+## Response
+
+Збереження **3 гілок** у `Event-Based Gateway` (`Очікування Webhook або TTL`) є семантично точнішим:
+1. У варіанті з 4 гілками подія `Отримано POST /retry-payment` виходить із початкового `Event-Based Gateway` на одному рівні з першим вебхуком оплати, що порушує причинно-наслідкову послідовність (запит `POST /retry-payment` фізично можливий лише після настання `Webhook charge.failed`).
+2. У варіанті з **3 гілками** без зайвого `Event-Based Gateway` та без другого таймера:
+   - Від `Event-Based Gateway` (`Очікування Webhook або TTL`) відходять **3 гілки**:
+     1. `Тайм-аут min(registered_at + 15 хв, deadline)`
+     2. `Webhook charge.successful`
+     3. `Webhook charge.failed`
+   - У гілці `Webhook charge.failed`:
+     1. Спочатку виконується `Service Task: Перевірити підпис, зберегти PENDING та відповісти 200 OK`;
+     2. Одразу після неї розташовується подія-пастка **`Intermediate Message Catch Event: Отримано POST /retry-payment`** (яка в нотації BPMN 2.0 сама по собі реалізує очікування вхідного повідомлення без додаткового шлюзу та таймера);
+     3. Після надходження `POST /retry-payment` виконується перевірка на шлюзі **`XOR: attempts < 3 та TTL дійсний?`**:
+        - **`Так`:** `Service Task: Створити нову Checkout-сесію (createRetrySession)` $\rightarrow$ `Send Task: Надіслати новий checkout_url користувачу` $\rightarrow$ повернення на вхід `Event-Based Gateway`;
+        - **`Ні`:** перехід до завершення сесії (`Залишити PENDING, надіслати SESSION_EXPIRED`).
